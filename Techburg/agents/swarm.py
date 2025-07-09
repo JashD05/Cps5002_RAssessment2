@@ -1,33 +1,26 @@
 # File: agents/swarm.py
-
 import random
-from typing import List
 from entities import SparePart
 
 class ScavengerSwarm:
     def __init__(self, position):
         self.position = position
-        self.size = 1
-        self.color = "green"
+        self.color = "lawn green"
 
-    def act(self, all_entities: List, parts: List[SparePart]):
-        self._apply_decay_field(all_entities)
-        self._consume(all_entities, parts)
-        self._move()
+    def think(self, grid):
+        self._apply_decay_field(grid.bots + grid.drones)
+        self._consume(grid)
 
-    def _apply_decay_field(self, all_entities: List):
-        for entity in all_entities:
-            if hasattr(entity, 'energy'):
-                distance = abs(self.position[0] - entity.position[0]) + abs(self.position[1] - entity.position[1])
-                if distance <= 1 and entity != self:
-                    entity.energy -= 3.0 # [cite: 87]
+    def move(self, grid):
+        self.position = (self.position[0] + random.choice([-1, 0, 1]), self.position[1] + random.choice([-1, 0, 1]))
+        self.position = grid.wrap_position(self.position)
 
-    def _consume(self, all_entities: List, parts: List[SparePart]):
-        item_to_remove = next((item for item in all_entities if self.position == item.position and item != self and item in parts), None)
+    def _apply_decay_field(self, agents):
+        for agent in agents:
+            dist = abs(self.position[0] - agent.position[0]) + abs(self.position[1] - agent.position[1])
+            if dist <= 1: agent.energy = max(0, agent.energy - 3.0)
+
+    def _consume(self, grid):
+        item_to_remove = next((part for part in grid.parts if self.position == part.position), None)
         if item_to_remove:
-            parts.remove(item_to_remove)
-            all_entities.remove(item_to_remove)
-    
-    def _move(self):
-        dx, dy = random.choice([-1, 0, 1]), random.choice([-1, 0, 1])
-        self.position = ((self.position[0] + dx) % 30, (self.position[1] + dy) % 30)
+            grid.parts.remove(item_to_remove)
