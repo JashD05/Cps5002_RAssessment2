@@ -3,7 +3,9 @@ import tkinter as tk
 from tkinter import font
 
 class SimulationGUI:
-    """Handles the graphical user interface for the Techburg simulation."""
+    """
+    Handles the graphical user interface for the Techburg simulation.
+    """
     def __init__(self, master, grid, cell_size=20):
         self.master = master
         self.grid = grid
@@ -13,7 +15,8 @@ class SimulationGUI:
             self.window,
             width=grid.width * self.cell_size,
             height=grid.height * self.cell_size,
-            bg='black'
+            bg='black',
+            highlightthickness=0
         )
         self.canvas.pack(pady=10, padx=10)
 
@@ -26,14 +29,21 @@ class SimulationGUI:
         self.stats_label.pack(side=tk.RIGHT, padx=10)
 
     def update_display(self):
-        """Redraws the canvas and updates the information labels."""
+        """Redraws the entire grid, drawing every cell to create a border effect."""
         self.canvas.delete("all")
-        for entity in self.grid.entities:
-            x1 = entity.x * self.cell_size
-            y1 = entity.y * self.cell_size
-            x2 = x1 + self.cell_size
-            y2 = y1 + self.cell_size
-            self.canvas.create_rectangle(x1, y1, x2, y2, fill=entity.color, outline='grey20')
+        for y in range(self.grid.height):
+            for x in range(self.grid.width):
+                entity = self.grid.get_entity(x, y)
+                x1 = x * self.cell_size
+                y1 = y * self.cell_size
+                x2 = x1 + self.cell_size
+                y2 = y1 + self.cell_size
+                fill_color = entity.color if entity else 'black'
+                self.canvas.create_rectangle(
+                    x1, y1, x2, y2,
+                    fill=fill_color,
+                    outline='grey25'
+                )
         self._update_stats_panel()
         self.window.update()
 
@@ -43,7 +53,6 @@ class SimulationGUI:
         parts_collected = self.grid.get_parts_collected_count()
         total_parts = self.grid.get_initial_parts_count()
         bots_destroyed = self.grid.get_bots_destroyed_count()
-
         stats_text = (f"Bots Active: {bot_count} | "
                       f"Parts Collected: {parts_collected}/{total_parts} | "
                       f"Bots Destroyed: {bots_destroyed}")

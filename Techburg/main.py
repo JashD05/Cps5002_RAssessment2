@@ -1,7 +1,7 @@
 # File: main.py
 import tkinter as tk
 from grid import Grid
-from gui import SimulationGUI
+from gui import SimulationGUI  # This line must match the class name in gui.py
 
 def main():
     """Main function to initialize and run the Techburg simulation."""
@@ -9,10 +9,9 @@ def main():
     root.title("Techburg Simulation")
 
     grid = Grid(width=30, height=30)
-    gui = SimulationGUI(root, grid)
+    gui = SimulationGUI(root, grid) # This line must also match
 
     # --- Simulation Setup ---
-    # Populate the grid with entities
     grid.populate_world(
         num_gatherer_bots=4,
         num_repair_bots=2,
@@ -26,7 +25,7 @@ def main():
     def simulation_step():
         grid.update_world()
         gui.update_display()
-        root.after(200, simulation_step) # Run next step after 200ms
+        root.after(200, simulation_step)
 
     # Start the simulation
     simulation_step()
