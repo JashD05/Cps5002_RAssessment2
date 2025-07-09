@@ -1,6 +1,7 @@
 # File: entities.py
 
 from enum import Enum, auto
+from typing import List
 
 class PartSize(Enum):
     SMALL, MEDIUM, LARGE = auto(), auto(), auto()
@@ -25,3 +26,10 @@ class SparePart:
     def corrode(self):
         if self.enhancement_value > 0:
             self.enhancement_value -= 0.1
+
+class RechargeStation:
+    """Represents a recharge station with its own inventory."""
+    def __init__(self, position):
+        self.position = position
+        self.inventory: List[SparePart] = []
+        self.color = 'purple'

@@ -15,7 +15,24 @@ class SimulationGUI:
         self.canvas = tk.Canvas(self.window, width=canvas_width, height=canvas_height, bg='black')
         self.canvas.pack()
         
+        self.status_label = tk.Label(self.window, text="Welcome to Techburg!", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        self.canvas.focus_set()
         self._draw_grid_lines()
+
+    def bind_keys(self, handler):
+        self.canvas.bind("<KeyPress-Up>", handler)
+        self.canvas.bind("<KeyPress-Down>", handler)
+        self.canvas.bind("<KeyPress-Left>", handler)
+        self.canvas.bind("<KeyPress-Right>", handler)
+        self.canvas.bind("<KeyPress-space>", handler)
+        self.canvas.bind("<KeyPress-1>", handler)
+        self.canvas.bind("<KeyPress-2>", handler)
+        self.canvas.bind("<KeyPress-3>", handler)
+
+    def update_status(self, text: str):
+        self.status_label.config(text=text)
 
     def _draw_grid_lines(self):
         for i in range(self.grid.width):
@@ -27,7 +44,7 @@ class SimulationGUI:
 
     def update_display(self):
         self.canvas.delete("all_items")
-        items_to_draw = self.grid.get_all_entities() + self.grid.get_drawable_stations()
+        items_to_draw = self.grid.get_all_entities()
         for item in items_to_draw:
             x, y = item.position
             fill_color = item.color

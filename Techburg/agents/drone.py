@@ -1,6 +1,7 @@
 # File: agents/drone.py
 import random
 from enum import Enum, auto
+from agents.survivor_bot import SurvivorBot, PlayerBot
 
 class DroneState(Enum):
     PATROLLING, PURSUING, HIBERNATING = auto(), auto(), auto()
@@ -14,7 +15,8 @@ class MalfunctioningDrone:
     def think(self, grid):
         if self.energy <= 20: self.state = DroneState.HIBERNATING
         elif self.state == DroneState.PATROLLING:
-            for bot in grid.bots:
+            bots_in_range = [bot for bot in grid.bots if not isinstance(bot, PlayerBot)]
+            for bot in bots_in_range:
                 dist = abs(self.position[0] - bot.position[0]) + abs(self.position[1] - bot.position[1])
                 if dist <= 3:
                     self.target_bot, self.state = bot, DroneState.PURSUING

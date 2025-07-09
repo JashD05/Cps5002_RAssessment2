@@ -9,16 +9,13 @@ class Grid:
         self.drones: List[Any] = []
         self.swarms: List[Any] = []
         self.parts: List[Any] = []
-        self.stations: List[Tuple[int, int]] = []
+        self.stations: List[Any] = []
 
     def get_all_entities(self) -> List[Any]:
-        return self.bots + self.drones + self.swarms + self.parts
+        return self.bots + self.drones + self.swarms + self.parts + self.stations
 
     def get_all_threats(self) -> List[Any]:
         return self.drones + self.swarms
-
-    def get_drawable_stations(self) -> List[Any]:
-        return [type('obj', (object,), {'position': s, 'color': 'purple'}) for s in self.stations]
 
     def wrap_position(self, position: Tuple[int, int]) -> Tuple[int, int]:
         x, y = position
