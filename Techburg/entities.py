@@ -14,10 +14,7 @@ class Entity:
         self.color = color
 
     def update(self, grid):
-        """
-        The base update method. Most entities will override this.
-        By default, an entity does nothing.
-        """
+        """The base update method. Most entities will override this."""
         pass
 
 # ==============================================================================
@@ -25,7 +22,7 @@ class Entity:
 # ==============================================================================
 
 class SurvivorBot(Entity):
-    """A base class for all bot types, containing shared logic."""
+    """A base class for all bot types, containing shared AI logic."""
     def __init__(self, x, y, bot_type, color):
         super().__init__(x, y, bot_type, color)
         self.energy = 100
@@ -34,84 +31,77 @@ class SurvivorBot(Entity):
         self.path = [] # The current path the bot is following
 
     def update(self, grid):
-        """Defines the bot's decision-making process each turn."""
+        """Defines the bot's AI decision-making process each turn."""
+        # --- Interaction Logic ---
+        # First, check if we are on a square we can interact with.
+        entity_at_pos = grid.get_entity(self.x, self.y)
+        if entity_at_pos:
+            # If we are on a part and not carrying anything, pick it up.
+            if "part" in entity_at_pos.type and not self.carrying_part:
+                self.pickup_part(entity_at_pos, grid)
+                self.path = [] # Clear path after picking up, to force re-evaluation.
+                return # End turn here
+            # If we are at a station and carrying a part, drop it off.
+            elif entity_at_pos.type == 'recharge_station' and self.carrying_part:
+                self.dropoff_part(grid)
+                self.path = [] # Clear path after dropping off.
+                return # End turn here
+
+        # --- Pathfinding and Goal Selection Logic ---
         # If the bot has a path, it follows it.
         if self.path:
             next_pos = self.path.pop(0)
-            # Basic energy check before moving
             if self.energy > self.energy_depletion_rate:
                 grid.move_entity(self, next_pos[0], next_pos[1])
                 self.energy -= self.energy_depletion_rate
             else:
-                self.energy = 0 # Bot runs out of energy
+                self.energy = 0
                 print(f"{self.type} at ({self.x}, {self.y}) ran out of energy.")
             return
 
-        # AI Decision Making: What should I do now?
+        # --- If idle (no path), decide on a new goal ---
         # 1. If carrying a part, find the nearest recharge station.
         if self.carrying_part:
             station = self.find_nearest(grid, 'recharge_station')
             if station:
-                self.path = grid.find_path((self.x, self.y), (station.x, station.y))
-                # Drop the first step because it's the current location
-                if self.path: self.path.pop(0)
-        # 2. If not carrying a part, find the nearest part to pick up.
+                new_path = grid.find_path((self.x, self.y), (station.x, station.y))
+                if new_path: self.path = new_path[1:] # Discard first step
+        # 2. If not carrying a part, find the nearest part.
         else:
-            part = self.find_nearest(grid, 'part')
+            part = self.find_nearest(grid, '_part') # Use underscore to match all part types
             if part:
-                self.path = grid.find_path((self.x, self.y), (part.x, part.y))
-                if self.path: self.path.pop(0)
+                new_path = grid.find_path((self.x, self.y), (part.x, part.y))
+                if new_path: self.path = new_path[1:] # Discard first step
 
-        # Interaction logic: pick up or drop off parts
-        entity_at_pos = grid.get_entity(self.x, self.y)
-        if entity_at_pos:
-            if "part" in entity_at_pos.type and not self.carrying_part:
-                self.pickup_part(entity_at_pos, grid)
-            elif entity_at_pos.type == 'recharge_station' and self.carrying_part:
-                self.dropoff_part(grid)
-
-    def find_nearest(self, grid, entity_type_prefix):
+    def find_nearest(self, grid, entity_type_suffix):
         """Finds the closest entity of a given type."""
-        targets = [e for e in grid.entities if e.type.startswith(entity_type_prefix)]
-        if not targets:
-            return None
-
-        # Calculate distance to all targets and find the minimum
-        closest_target = min(
-            targets,
-            key=lambda t: math.hypot(self.x - t.x, self.y - t.y)
-        )
-        return closest_target
+        targets = [e for e in grid.entities if e.type.endswith(entity_type_suffix)]
+        if not targets: return None
+        return min(targets, key=lambda t: math.hypot(self.x - t.x, self.y - t.y))
 
     def pickup_part(self, part, grid):
-        """Picks up a spare part from the grid."""
         self.carrying_part = part
         grid.remove_entity(part)
         print(f"{self.type} picked up a {part.size} part.")
 
     def dropoff_part(self, grid):
-        """Drops off a part at a recharge station."""
         print(f"{self.type} dropped off a {self.carrying_part.size} part.")
         grid.increment_parts_collected()
         self.carrying_part = None
-        # Bot gains energy for dropping off part
         self.energy = min(100, self.energy + 25)
 
 class PlayerBot(SurvivorBot):
-    """The bot controlled by the player. Its logic will be tied to keyboard input."""
+    """The bot controlled by the player."""
     def __init__(self, x, y):
         super().__init__(x, y, "player_bot", "orange")
-
-    # The PlayerBot's update method will likely be handled separately in the
-    # main loop based on keyboard events, so it can be left empty here.
     def update(self, grid):
-        pass # Player movement is not autonomous
+        # Player movement is not autonomous.
+        pass
 
 class GathererBot(SurvivorBot):
     """A bot that specializes in collecting parts."""
     def __init__(self, x, y):
         super().__init__(x, y, "gatherer_bot", "light sea green")
-        # Gatherers are slightly more energy efficient
         self.energy_depletion_rate = 4
 
 class RepairBot(SurvivorBot):
@@ -119,59 +109,32 @@ class RepairBot(SurvivorBot):
     def __init__(self, x, y):
         super().__init__(x, y, "repair_bot", "cornflower blue")
 
-    # RepairBot could have additional logic for collaboration
-    # This would be implemented in its update method.
-
-
 # ==============================================================================
-# --- ENEMY CLASSES ---
+# --- ENEMY CLASSES (with AI) ---
 # ==============================================================================
-
 class MalfunctioningDrone(Entity):
     """An enemy that pursues and attacks bots."""
     def __init__(self, x, y):
         super().__init__(x, y, "drone", "red")
-        self.pursuit_target = None
         self.path = []
 
     def update(self, grid):
-        # If the drone has a path, follow it
         if self.path:
             next_pos = self.path.pop(0)
             grid.move_entity(self, next_pos[0], next_pos[1])
             return
 
-        # Check for nearby bots to pursue
-        nearby_bots = self.find_bots_in_range(grid)
+        nearby_bots = [b for b in grid.get_all_bots() if math.hypot(self.x - b.x, self.y - b.y) <= VISION_RANGE]
         if nearby_bots:
-            # Simple logic: target the closest bot
-            self.pursuit_target = min(
-                nearby_bots,
-                key=lambda b: math.hypot(self.x - b.x, self.y - b.y)
-            )
-            # Find a path to the target
-            self.path = grid.find_path((self.x, self.y), (self.pursuit_target.x, self.pursuit_target.y))
-            if self.path: self.path.pop(0)
+            target = min(nearby_bots, key=lambda b: math.hypot(self.x - b.x, self.y - b.y))
+            new_path = grid.find_path((self.x, self.y), (target.x, target.y))
+            if new_path: self.path = new_path[1:]
         else:
-            # If no bots are nearby, move randomly
             self.move_randomly(grid)
 
-    def find_bots_in_range(self, grid):
-        """Finds bots within the drone's vision range."""
-        bots_in_range = []
-        for entity in grid.get_all_bots():
-            distance = math.hypot(self.x - entity.x, self.y - entity.y)
-            if distance <= VISION_RANGE:
-                bots_in_range.append(entity)
-        return bots_in_range
-
     def move_randomly(self, grid):
-        """Moves the drone to a random adjacent cell."""
         dx, dy = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0)])
-        new_x = (self.x + dx) % grid.width
-        new_y = (self.y + dy) % grid.height
-        grid.move_entity(self, new_x, new_y)
-
+        grid.move_entity(self, (self.x + dx) % grid.width, (self.y + dy) % grid.height)
 
 class ScavengerSwarm(Entity):
     """An enemy that consumes parts and moves randomly."""
@@ -179,45 +142,30 @@ class ScavengerSwarm(Entity):
         super().__init__(x, y, "swarm", "lawn green")
 
     def update(self, grid):
-        # Check if standing on a part
         entity_at_pos = grid.get_entity(self.x, self.y)
         if entity_at_pos and "part" in entity_at_pos.type:
             print(f"Swarm consumed a {entity_at_pos.size} part.")
             grid.remove_entity(entity_at_pos)
         else:
-            # Move to a random adjacent cell
             dx, dy = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0)])
-            new_x = (self.x + dx) % grid.width
-            new_y = (self.y + dy) % grid.height
-            grid.move_entity(self, new_x, new_y)
-
+            grid.move_entity(self, (self.x + dx) % grid.width, (self.y + dy) % grid.height)
 
 # ==============================================================================
 # --- ITEM CLASSES ---
 # ==============================================================================
-
 class SparePart(Entity):
     """A part that can be collected by bots."""
     def __init__(self, x, y, size="small"):
         self.size = size
         color_map = {"small": "cyan", "medium": "magenta", "large": "yellow"}
         super().__init__(x, y, f"{size}_part", color_map.get(size))
-        # Set value based on size
         value_map = {"small": 3.0, "medium": 5.0, "large": 7.0}
         self.value = value_map.get(size)
 
     def update(self, grid):
-        """Parts corrode over time, losing value."""
-        self.corrode()
-
-    def corrode(self):
-        """Reduces the part's value slightly each turn."""
         self.value = max(0, self.value - 0.001)
-
 
 class RechargeStation(Entity):
     """A fixed location for bots to recharge and drop off parts."""
     def __init__(self, x, y):
         super().__init__(x, y, "recharge_station", "purple")
-
-    # Recharge stations are static and don't need an update method.
