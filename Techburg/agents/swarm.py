@@ -1,26 +1,35 @@
-# File: agents/swarm.py
-import random
-from entities import SparePart
+# File: Techburg/agents/swarm.py
+import math
 
 class ScavengerSwarm:
-    def __init__(self, position):
-        self.position = position
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.type = "swarm"
         self.color = "lawn green"
+        # HARD MODE: Swarms have a damaging aura
+        self.decay_field_radius = 1.5 # Adjacent cells, including diagonals
+        self.decay_damage = 5
 
-    def think(self, grid):
-        self._apply_decay_field(grid.bots + grid.drones)
-        self._consume(grid)
+    def update(self, grid):
+        """Swarm AI: Move randomly, consume parts, and damage nearby bots."""
+        import random
 
-    def move(self, grid):
-        self.position = (self.position[0] + random.choice([-1, 0, 1]), self.position[1] + random.choice([-1, 0, 1]))
-        self.position = grid.wrap_position(self.position)
+        # --- HARD MODE: Decay Field Logic ---
+        for bot in grid.get_all_bots():
+            dist = math.hypot(self.x - bot.x, self.y - bot.y)
+            if dist <= self.decay_field_radius:
+                # This bot is adjacent to the swarm
+                bot.energy -= self.decay_damage
+        # --- End Decay Field Logic ---
 
-    def _apply_decay_field(self, agents):
-        for agent in agents:
-            dist = abs(self.position[0] - agent.position[0]) + abs(self.position[1] - agent.position[1])
-            if dist <= 1: agent.energy = max(0, agent.energy - 3.0)
-
-    def _consume(self, grid):
-        item_to_remove = next((part for part in grid.parts if self.position == part.position), None)
-        if item_to_remove:
-            grid.parts.remove(item_to_remove)
+        # Move to a new random location
+        dx, dy = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0)])
+        new_x = (self.x + dx) % grid.width
+        new_y = (self.y + dy) % grid.height
+        
+        if grid.move_entity(self, new_x, new_y):
+            # After moving, check for parts to consume
+            entity_at_pos = grid.get_entity(self.x, self.y)
+            if entity_at_pos and entity_at_pos.type == 'spare_part':
+                grid.remove_entity(entity_at_pos)

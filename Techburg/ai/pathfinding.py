@@ -1,51 +1,64 @@
-# File: ai/pathfinding.py
-
+# File: Techburg/ai/pathfinding.py
 import heapq
-from typing import List, Tuple, Optional
 
-class Node:
-    def __init__(self, position: Tuple[int, int], parent=None):
-        self.position, self.parent = position, parent
-        self.g, self.h, self.f = 0, 0, 0
-    def __eq__(self, other): return self.position == other.position
-    def __lt__(self, other): return self.f < other.f
-    def __hash__(self): return hash(self.position)
+def find_path(grid, start, end):
+    """
+    Finds the shortest path between two points on the grid using the A* algorithm.
+    Correctly handles the grid wrapping around the edges (toroidal).
 
-class AStarPathfinder:
-    def __init__(self, grid_size: Tuple[int, int], obstacles: List[Tuple[int, int]]):
-        self.grid_width, self.grid_height = grid_size
-        self.obstacles = set(obstacles)
+    Args:
+        grid: The main grid object, used to get world dimensions.
+        start: A tuple (x, y) for the starting position.
+        end: A tuple (x, y) for the target position.
 
-    def update_obstacles(self, new_obstacle_positions: List[Tuple[int, int]]):
-        self.obstacles = set(new_obstacle_positions)
+    Returns:
+        A list of (x, y) tuples representing the path from start to end,
+        or None if no path is found.
+    """
+    
+    def heuristic(a, b):
+        """Calculates the toroidal distance heuristic for A*."""
+        dx = abs(b[0] - a[0])
+        dy = abs(b[1] - a[1])
+        # Consider the wrap-around distance for both axes
+        shortest_dx = min(dx, grid.width - dx)
+        shortest_dy = min(dy, grid.height - dy)
+        return shortest_dx + shortest_dy
 
-    def _get_heuristic(self, node_pos: Tuple[int, int], end_pos: Tuple[int, int]) -> int:
-        dx, dy = abs(node_pos[0] - end_pos[0]), abs(node_pos[1] - end_pos[1])
-        return min(dx, self.grid_width - dx) + min(dy, self.grid_height - dy)
+    open_set = []
+    heapq.heappush(open_set, (0, start))  # (f_score, node)
 
-    def find_path(self, start_pos: Tuple[int, int], end_pos: Tuple[int, int]) -> Optional[List[Tuple[int, int]]]:
-        start_node, end_node = Node(start_pos), Node(end_pos)
-        open_list, closed_set = [], set()
-        heapq.heappush(open_list, start_node)
+    came_from = {}
+    g_score = {start: 0}
+    f_score = {start: heuristic(start, end)}
 
-        while open_list:
-            current_node = heapq.heappop(open_list)
-            if current_node.position in closed_set: continue
-            closed_set.add(current_node.position)
+    while open_set:
+        current = heapq.heappop(open_set)[1]
 
-            if current_node == end_node:
-                path = []
-                current = current_node
-                while current: path.append(current.position)
-                return path[::-1]
+        if current == end:
+            # Reconstruct the path from end to start
+            path = []
+            while current in came_from:
+                path.append(current)
+                current = came_from[current]
+            path.append(start)
+            return path[::-1]  # Return the reversed path
 
-            for new_pos in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-                node_pos = ((current_node.position[0] + new_pos[0]) % self.grid_width, (current_node.position[1] + new_pos[1]) % self.grid_height)
-                if node_pos in self.obstacles: continue
+        # Explore neighbors
+        for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            neighbor = ((current[0] + dx) % grid.width, (current[1] + dy) % grid.height)
+
+            # Cost of moving to a neighbor is always 1
+            tentative_g_score = g_score[current] + 1
+
+            if tentative_g_score < g_score.get(neighbor, float('inf')):
+                # This path to neighbor is better than any previous one. Record it.
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative_g_score
+                f_score[neighbor] = tentative_g_score + heuristic(neighbor, end)
                 
-                child = Node(node_pos, current_node)
-                child.g = current_node.g + 1
-                child.h = self._get_heuristic(child.position, end_node.position)
-                child.f = child.g + child.h
-                heapq.heappush(open_list, child)
-        return None
+                # Check if neighbor is in open_set to avoid duplicates
+                if neighbor not in [i[1] for i in open_set]:
+                    heapq.heappush(open_set, (f_score[neighbor], neighbor))
+
+    return None  # No path found

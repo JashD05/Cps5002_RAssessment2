@@ -1,116 +1,112 @@
-# File: agents/survivor_bot.py
-
-from typing import Tuple, Optional, List
-from enum import Enum, auto
-from ai.pathfinding import AStarPathfinder
-from entities import SparePart
-
-# --- NEW PERFORMANCE CONSTANT ---
-# Bots will only consider parts within this distance.
-# This dramatically reduces CPU and Memory usage.
-MAX_AI_SCAVENGE_RADIUS = 15
-
-class BotState(Enum):
-    SEARCHING, MOVING_TO_PART, MOVING_TO_STATION = auto(), auto(), auto()
+# File: Techburg/agents/survivor_bot.py
+import math
+from ai.pathfinding import find_path
 
 class SurvivorBot:
-    def __init__(self, bot_id: int, start_pos: Tuple[int, int], pathfinder: AStarPathfinder):
-        self.id, self.position, self.pathfinder = bot_id, start_pos, pathfinder
-        self.energy, self.state = 100.0, BotState.SEARCHING
-        self.path: List[Tuple[int, int]] = []
-        self.carried_part: Optional[SparePart] = None
-        self.target_part: Optional[SparePart] = None
+    def __init__(self, bot_id, x, y, energy=100):
+        self.bot_id = bot_id
+        self.x = x
+        self.y = y
+        self.energy = energy
+        self.energy_depletion_rate = 8
+        self.carrying_part = None
+        self.path = []
+        self.state = "SEARCHING"
+        self.type = "survivor_bot"
         self.color = "deep sky blue"
 
-    def think(self, grid):
-        if self.energy <= 40 and self.state != BotState.MOVING_TO_STATION:
-            self._start_moving_to_station(grid)
-            return
+    def update(self, grid):
         if not self.path:
-            if self.state == BotState.MOVING_TO_PART: self._handle_arrival_at_part(grid)
-            elif self.state == BotState.MOVING_TO_STATION: self._handle_arrival_at_station()
+            entity_at_pos = grid.get_entity(self.x, self.y)
+            if entity_at_pos:
+                if entity_at_pos.type == 'recharge_station' and self.carrying_part:
+                    grid.increment_parts_collected()
+                    self.carrying_part = None
+                    self.state = "SEARCHING"
+                    return
+                elif entity_at_pos.type == 'spare_part' and not self.carrying_part:
+                    self.carrying_part = entity_at_pos
+                    grid.remove_entity(entity_at_pos)
+                    self.state = "SEARCHING"
+                    return
+
+        if self.state == "SEARCHING":
+            if self.carrying_part:
+                self.state = "MOVING_TO_STATION"
             else:
-                self.state = BotState.SEARCHING
-                self._search_for_best_part(grid)
+                target_part = self.find_nearest_target(grid, "spare_part")
+                if target_part:
+                    path = find_path(grid, (self.x, self.y), (target_part.x, target_part.y))
+                    if path: self.path = path
+                    self.state = "MOVING_TO_PART"
 
-    def move(self, grid):
-        if self.path:
-            self.position = self.path.pop(0)
-            self.energy -= 5
-            self.position = grid.wrap_position(self.position)
+        elif self.state == "MOVING_TO_PART":
+            if not self.path:
+                self.state = "SEARCHING"
+            else:
+                # --- CORRECTED LOGIC ---
+                # Pop only ONCE and store the result
+                next_pos = self.path.pop(0)
+                self.move_to(next_pos[0], next_pos[1], grid)
+                # --- END CORRECTION ---
 
-    def _handle_arrival_at_part(self, grid):
-        self.carried_part, self.target_part = self.target_part, None
-        if self.carried_part in grid.parts: grid.parts.remove(self.carried_part)
-        self._start_moving_to_station(grid)
+        elif self.state == "MOVING_TO_STATION":
+            if not self.path:
+                target_station = self.find_nearest_target(grid, "recharge_station")
+                if target_station:
+                    path = find_path(grid, (self.x, self.y), (target_station.x, target_station.y))
+                    if path: self.path = path
+                else:
+                    self.state = "SEARCHING"
+            else:
+                # --- CORRECTED LOGIC ---
+                # Pop only ONCE and store the result
+                next_pos = self.path.pop(0)
+                self.move_to(next_pos[0], next_pos[1], grid)
+                # --- END CORRECTION ---
+                
+                if not self.path:
+                    self.state = "SEARCHING"
 
-    def _handle_arrival_at_station(self):
-        if self.carried_part: self.carried_part = None
-        self.energy = min(100, self.energy + 10.0)
-        if self.energy == 100: self.state = BotState.SEARCHING
-    
-    def _score_part(self, part: SparePart, threats: List) -> float:
-        VALUE_WEIGHT, DISTANCE_WEIGHT, RISK_WEIGHT = 1.5, 1.0, 2.0
-        value = part.enhancement_value
-        distance = self.pathfinder._get_heuristic(self.position, part.position)
-        risk = 0
-        if threats:
-            min_dist = min([self.pathfinder._get_heuristic(part.position, t.position) for t in threats])
-            if min_dist <= 3: risk = 10
-        return (value * VALUE_WEIGHT) - (distance * DISTANCE_WEIGHT) - (risk * RISK_WEIGHT)
+    def find_nearest_target(self, grid, target_type):
+        targets = grid.get_all_entities_of_type(target_type)
+        if not targets:
+            return None
+        def toroidal_distance(p1_x, p1_y, p2_x, p2_y):
+            dx = abs(p1_x - p2_x)
+            dy = abs(p1_y - p2_y)
+            shortest_dx = min(dx, grid.width - dx)
+            shortest_dy = min(dy, grid.height - dy)
+            return math.sqrt(shortest_dx**2 + shortest_dy**2)
+        return min(targets, key=lambda t: toroidal_distance(self.x, self.y, t.x, t.y))
 
-    def _search_for_best_part(self, grid):
-        """Finds the best part, but now only considers nearby parts."""
-        if not grid.parts: return
-        
-        # --- PERFORMANCE OPTIMIZATION ---
-        # First, filter for parts within the bot's "scavenge radius".
-        nearby_parts = [
-            p for p in grid.parts
-            if self.pathfinder._get_heuristic(self.position, p.position) <= MAX_AI_SCAVENGE_RADIUS
-        ]
-        if not nearby_parts: return # No parts are close enough to consider.
+    def move_to(self, x, y, grid):
+        if self.energy > self.energy_depletion_rate:
+            if grid.move_entity(self, x, y):
+                self.energy -= self.energy_depletion_rate
+        else:
+            self.energy = 0
 
-        threats = grid.get_all_threats()
-        self.pathfinder.update_obstacles([t.position for t in threats])
-        
-        # Now, only score the nearby parts.
-        scored_parts = [(p, self._score_part(p, threats)) for p in nearby_parts]
-        if not scored_parts: return
-        
-        self.target_part, _ = max(scored_parts, key=lambda item: item[1])
-        path_result = self.pathfinder.find_path(self.position, self.target_part.position)
-        if path_result:
-            self.path, self.state = path_result[1:], BotState.MOVING_TO_PART
-
-    def _start_moving_to_station(self, grid):
-        if not grid.stations: return
-        station_positions = [s.position for s in grid.stations]
-        closest = min(station_positions, key=lambda s: self.pathfinder._get_heuristic(self.position, s))
-        path_result = self.pathfinder.find_path(self.position, closest)
-        if path_result:
-            self.path, self.state = path_result[1:], BotState.MOVING_TO_STATION
+# --- Other Bot Classes (GathererBot, RepairBot, PlayerBot) remain the same ---
 
 class GathererBot(SurvivorBot):
-    """A bot specialized in gathering parts."""
-    def __init__(self, bot_id: int, start_pos: Tuple[int, int], pathfinder: AStarPathfinder):
-        super().__init__(bot_id, start_pos, pathfinder)
+    def __init__(self, bot_id, x, y, energy=100):
+        super().__init__(bot_id, x, y, energy)
+        self.energy_depletion_rate = 7
+        self.type = "gatherer_bot"
         self.color = "light sea green"
 
 class RepairBot(SurvivorBot):
-    """A bot specialized in repairing and enabling replication."""
-    def __init__(self, bot_id: int, start_pos: Tuple[int, int], pathfinder: AStarPathfinder):
-        super().__init__(bot_id, start_pos, pathfinder)
+    def __init__(self, bot_id, x, y, energy=100):
+        super().__init__(bot_id, x, y, energy)
+        self.type = "repair_bot"
         self.color = "cornflower blue"
 
 class PlayerBot(SurvivorBot):
-    """A SurvivorBot controlled by the player's keyboard input."""
-    def __init__(self, bot_id: int, start_pos: Tuple[int, int], pathfinder: AStarPathfinder):
-        super().__init__(bot_id, start_pos, pathfinder)
+    def __init__(self, bot_id, x, y, energy=100):
+        super().__init__(bot_id, x, y, energy)
+        self.type = "player_bot"
         self.color = "orange"
-        self.speed_enhancement = 0
-        self.vision_enhancement = 0
-        self.energy_capacity = 100
         
-    def think(self, grid): pass
-    def move(self, grid): pass
+    def update(self, grid):
+        pass
