@@ -38,7 +38,7 @@ class SimulationGUI:
                 entity = self.grid.get_entity(x, y)
                 x1, y1 = x * self.cell_size, y * self.cell_size
                 x2, y2 = x1 + self.cell_size, y1 + self.cell_size
-                fill_color = entity.color if entity else 'black'
+                fill_color = entity.color if hasattr(entity, 'color') else 'black'
                 self.canvas.create_rectangle(x1, y1, x2, y2, fill=fill_color, outline='grey25')
         self._update_stats_panel()
         self.window.update()
