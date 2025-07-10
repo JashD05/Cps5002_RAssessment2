@@ -2,20 +2,38 @@
 import tkinter as tk
 from tkinter import font as tkFont
 import random
+import sys
+import os
 from grid import Grid
 from agents.survivor_bot import PlayerBot, GathererBot, RepairBot, SurvivorBot
 
-GRID_WIDTH, GRID_HEIGHT, CELL_SIZE = 30, 20, 20
-SPEED_LEVELS = [("x0.5", 200), ("x1", 100), ("x2", 50), ("x4", 20)]
-simulation_paused, current_speed_index = False, 1
+# --- Simulation Parameters ---
+GRID_WIDTH = 30
+GRID_HEIGHT = 20
+CELL_SIZE = 20
+SIMULATION_SPEED = 100 # Using a single, constant speed
 
 def main():
-    global grid, player_bot, window, canvas, status_bar, initial_survivor_count, speed_label, pause_button
+    """Sets up and runs the simulation."""
+    global grid, player_bot, window, canvas, status_bar, initial_survivor_count, simulation_paused, pause_button
+
+    # Initialize state variables
+    simulation_paused = False
 
     grid = Grid(GRID_WIDTH, GRID_HEIGHT)
-    player_bot = grid.populate_world(num_parts=70, num_stations=5, num_drones=6, num_swarms=4, num_gatherers=6, num_repair_bots=3)
+    
+    player_bot = grid.populate_world(
+        num_parts=70,
+        num_stations=5,
+        num_drones=6,
+        num_swarms=4,
+        num_gatherers=6,
+        num_repair_bots=3
+    )
+    
     initial_survivor_count = len(grid.get_all_bots())
             
+    # --- GUI Setup ---
     window = tk.Tk()
     window.title("Techburg Simulation")
     window.configure(bg="gray10")
@@ -27,14 +45,18 @@ def main():
     status_bar = tk.Label(status_frame, textvariable=status_text, anchor=tk.W, fg="white", bg="gray25", font=("Consolas", 10), padx=5); status_bar.pack(fill=tk.X)
     status_bar.text_var = status_text
 
-    control_frame = tk.Frame(main_frame, bg="gray10"); control_frame.pack(fill=tk.X, pady=5)
-    pause_button = tk.Button(control_frame, text="Pause", command=toggle_pause, width=10); pause_button.pack(side=tk.LEFT, padx=(0,10))
-    tk.Button(control_frame, text="Slower <<", command=lambda: change_speed(-1)).pack(side=tk.LEFT)
-    speed_label = tk.Label(control_frame, text=f"Speed: {SPEED_LEVELS[current_speed_index][0]}", width=10, fg="white", bg="gray10"); speed_label.pack(side=tk.LEFT)
-    tk.Button(control_frame, text=">> Faster", command=lambda: change_speed(1)).pack(side=tk.LEFT)
-    quit_button = tk.Button(control_frame, text="Quit Game", command=window.destroy, bg="dark red", fg="white", activebackground="red"); quit_button.pack(side=tk.RIGHT, padx=5)
-    tk.Button(control_frame, text="Try Again", command=lambda: restart_program(window), bg="steel blue", fg="white", activebackground="light blue").pack(side=tk.RIGHT)
+    # --- Button Frame ---
+    button_frame = tk.Frame(main_frame, bg="gray10"); button_frame.pack(fill=tk.X, pady=5)
+    
+    # Pause Button
+    pause_button = tk.Button(button_frame, text="Pause", command=toggle_pause, width=10)
+    pause_button.pack(side=tk.LEFT)
+    
+    # Right-aligned buttons
+    quit_button = tk.Button(button_frame, text="Quit Game", command=window.destroy, bg="dark red", fg="white", activebackground="red"); quit_button.pack(side=tk.RIGHT, padx=5)
+    tk.Button(button_frame, text="Try Again", command=lambda: restart_program(window), bg="steel blue", fg="white", activebackground="light blue").pack(side=tk.RIGHT)
 
+    # --- Key Bindings ---
     window.bind('<KeyPress-w>', lambda e: move_player(0, -1)); window.bind('<KeyPress-s>', lambda e: move_player(0, 1))
     window.bind('<KeyPress-a>', lambda e: move_player(-1, 0)); window.bind('<KeyPress-d>', lambda e: move_player(1, 0))
     window.bind('<space>', toggle_pause)
@@ -42,12 +64,8 @@ def main():
     simulation_step()
     window.mainloop()
 
-def change_speed(delta):
-    global current_speed_index
-    current_speed_index = max(0, min(len(SPEED_LEVELS) - 1, current_speed_index + delta))
-    speed_label.config(text=f"Speed: {SPEED_LEVELS[current_speed_index][0]}")
-
 def toggle_pause(event=None):
+    """Pauses or resumes the simulation."""
     global simulation_paused
     simulation_paused = not simulation_paused
     pause_button.config(text="Resume" if simulation_paused else "Pause")
@@ -56,6 +74,7 @@ def toggle_pause(event=None):
 def restart_program(window): window.destroy(); main()
 
 def move_player(dx, dy):
+    """Moves the player bot."""
     if not simulation_paused and player_bot and player_bot.energy > 0:
         new_x, new_y = player_bot.x + dx, player_bot.y + dy
         if grid.is_valid(new_x, new_y):
@@ -67,15 +86,17 @@ def move_player(dx, dy):
                     player_bot.pickup_part(part_to_collect, grid)
 
 def simulation_step():
+    """Runs one step of the simulation and schedules the next."""
     if simulation_paused or 'normal' != window.state(): return
     if not (player_bot and player_bot in grid.entities):
         draw_grid(); game_over()
         return
 
     grid.update_world(); draw_grid()
-    window.after(SPEED_LEVELS[current_speed_index][1], simulation_step)
+    window.after(SIMULATION_SPEED, simulation_step)
 
 def draw_grid():
+    """Draws the grid and all entities."""
     canvas.delete("all")
     for x in range(GRID_WIDTH):
         for y in range(GRID_HEIGHT):
@@ -87,6 +108,7 @@ def draw_grid():
     update_ui()
 
 def update_ui():
+    """Updates the consolidated status bar."""
     num_survivors = len(grid.get_all_bots())
     bots_destroyed = initial_survivor_count - num_survivors
     player_energy = int(player_bot.energy) if player_bot and player_bot in grid.entities else "---"
@@ -94,6 +116,7 @@ def update_ui():
     status_bar.text_var.set(status_string)
 
 def game_over():
+    """Displays a game over message on the canvas."""
     canvas.create_text(GRID_WIDTH*CELL_SIZE/2, GRID_HEIGHT*CELL_SIZE/2, text="GAME OVER", font=("Helvetica", 40, "bold"), fill="red")
 
 if __name__ == "__main__":
