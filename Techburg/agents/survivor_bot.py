@@ -1,112 +1,161 @@
-# File: Techburg/agents/survivor_bot.py
+# agents/survivor_bot.py
 import math
 from ai.pathfinding import find_path
+from entities import SparePart
 
 class SurvivorBot:
+    """A bot that collects parts, uses enhancements, and collaborates."""
     def __init__(self, bot_id, x, y, energy=100):
         self.bot_id = bot_id
         self.x = x
         self.y = y
         self.energy = energy
-        self.energy_depletion_rate = 8
+        
+        # Base stats
+        self.base_max_energy = 100
+        self.base_speed = 1
+        self.base_vision = 5
+        
+        # Current stats
+        self.max_energy = self.base_max_energy
+        self.speed = self.base_speed
+        self.vision = self.base_vision
+
+        self.energy_depletion_rate = 0.05
         self.carrying_part = None
         self.path = []
         self.state = "SEARCHING"
-        self.type = "survivor_bot"
+        self.type = 'survivor_bot'
         self.color = "deep sky blue"
+        self.stunned = 0
+        self.target_entity = None
+        
+        self.active_enhancements = {}
 
     def update(self, grid):
-        if not self.path:
-            entity_at_pos = grid.get_entity(self.x, self.y)
-            if entity_at_pos:
-                if entity_at_pos.type == 'recharge_station' and self.carrying_part:
-                    grid.increment_parts_collected()
-                    self.carrying_part = None
-                    self.state = "SEARCHING"
-                    return
-                elif entity_at_pos.type == 'spare_part' and not self.carrying_part:
-                    self.carrying_part = entity_at_pos
-                    grid.remove_entity(entity_at_pos)
-                    self.state = "SEARCHING"
-                    return
+        """Main update logic for the bot."""
+        if self.energy <= 0:
+            return # Bot is out of energy, do nothing
+            
+        if self.stunned > 0:
+            self.stunned -= 1
+            return
+            
+        self.energy -= self.energy_depletion_rate
+        self.update_enhancements(grid)
+        
+        self.execute_state_action(grid)
 
-        if self.state == "SEARCHING":
-            if self.carrying_part:
-                self.state = "MOVING_TO_STATION"
-            else:
-                target_part = self.find_nearest_target(grid, "spare_part")
-                if target_part:
-                    path = find_path(grid, (self.x, self.y), (target_part.x, target_part.y))
-                    if path: self.path = path
-                    self.state = "MOVING_TO_PART"
+    def execute_state_action(self, grid):
+        """Determines the bot's state and acts accordingly."""
+        # 1. Decide what the goal is
+        if self.energy < 30:
+            self.state = "FLEEING_TO_STATION"
+            self.target_entity = self.find_nearest_target(grid, 'recharge_station')
+        elif self.carrying_part:
+            self.state = "MOVING_TO_STATION"
+            self.target_entity = self.find_nearest_target(grid, 'recharge_station')
+        else:
+            self.state = "SEARCHING"
+            self.target_entity = self.find_nearest_target(grid, 'spare_part')
 
-        elif self.state == "MOVING_TO_PART":
-            if not self.path:
-                self.state = "SEARCHING"
-            else:
-                # --- CORRECTED LOGIC ---
-                # Pop only ONCE and store the result
-                next_pos = self.path.pop(0)
-                self.move_to(next_pos[0], next_pos[1], grid)
-                # --- END CORRECTION ---
-
-        elif self.state == "MOVING_TO_STATION":
-            if not self.path:
-                target_station = self.find_nearest_target(grid, "recharge_station")
-                if target_station:
-                    path = find_path(grid, (self.x, self.y), (target_station.x, target_station.y))
-                    if path: self.path = path
-                else:
-                    self.state = "SEARCHING"
-            else:
-                # --- CORRECTED LOGIC ---
-                # Pop only ONCE and store the result
-                next_pos = self.path.pop(0)
-                self.move_to(next_pos[0], next_pos[1], grid)
-                # --- END CORRECTION ---
+        # 2. Act on the goal
+        if self.target_entity:
+            # Check if we have arrived at the target
+            if self.x == self.target_entity.x and self.y == self.target_entity.y:
+                if self.target_entity.type == 'recharge_station':
+                    self.energy = self.max_energy
+                    if self.carrying_part:
+                        grid.increment_parts_collected()
+                        self.carrying_part = None
+                elif self.target_entity.type == 'spare_part':
+                    self.pickup_part(self.target_entity, grid)
                 
-                if not self.path:
-                    self.state = "SEARCHING"
+                self.target_entity = None # Clear target to find a new one next turn
+            else:
+                # If not at the target, move towards it
+                self.move_towards(self.target_entity, grid)
+
+    def move_towards(self, target, grid):
+        """Finds a path and moves one step."""
+        path = find_path(grid, (self.x, self.y), (target.x, target.y))
+        if path:
+            next_pos = path[0]
+            grid.move_entity(self, next_pos[0], next_pos[1])
 
     def find_nearest_target(self, grid, target_type):
-        targets = grid.get_all_entities_of_type(target_type)
+        """Finds the nearest visible target of a given type."""
+        targets = [e for e in grid.entities if e.type == target_type]
         if not targets:
             return None
-        def toroidal_distance(p1_x, p1_y, p2_x, p2_y):
-            dx = abs(p1_x - p2_x)
-            dy = abs(p1_y - p2_y)
-            shortest_dx = min(dx, grid.width - dx)
-            shortest_dy = min(dy, grid.height - dy)
-            return math.sqrt(shortest_dx**2 + shortest_dy**2)
-        return min(targets, key=lambda t: toroidal_distance(self.x, self.y, t.x, t.y))
+            
+        visible_targets = [t for t in targets if math.hypot(self.x-t.x, self.y-t.y) <= self.vision]
+        if not visible_targets:
+            return None
+        return min(visible_targets, key=lambda t: math.hypot(self.x-t.x, self.y-t.y))
 
-    def move_to(self, x, y, grid):
-        if self.energy > self.energy_depletion_rate:
-            if grid.move_entity(self, x, y):
-                self.energy -= self.energy_depletion_rate
-        else:
-            self.energy = 0
+    def pickup_part(self, part, grid):
+        """Picks up a part and applies its enhancement."""
+        if not self.carrying_part and part in grid.entities:
+            self.carrying_part = part
+            grid.remove_entity(part)
+            self.apply_enhancement(part)
 
-# --- Other Bot Classes (GathererBot, RepairBot, PlayerBot) remain the same ---
+    def apply_enhancement(self, part: SparePart):
+        """Applies an enhancement from a part."""
+        enhancement_type = part.enhancement_type
+        life = part.max_corrosion - part.corrosion_level
+        self.active_enhancements[enhancement_type] = life
+        self.recalculate_stats()
 
+    def update_enhancements(self, grid):
+        """Corrodes enhancements and removes them when they expire."""
+        expired = []
+        for enhancement, life in self.active_enhancements.items():
+            self.active_enhancements[enhancement] -= 1
+            if self.active_enhancements[enhancement] <= 0:
+                expired.append(enhancement)
+        
+        if expired:
+            for enhancement in expired:
+                del self.active_enhancements[enhancement]
+            self.recalculate_stats()
+
+    def recalculate_stats(self):
+        """Recalculates bot stats based on active enhancements."""
+        self.max_energy = self.base_max_energy
+        self.speed = self.base_speed
+        self.vision = self.base_vision
+        if 'energy_capacity' in self.active_enhancements:
+            self.max_energy += 50
+        if 'speed' in self.active_enhancements:
+            self.speed = self.base_speed * 1.5
+        if 'vision' in self.active_enhancements:
+            self.vision = self.base_vision + 3
+
+# --- Subclasses ---
 class GathererBot(SurvivorBot):
     def __init__(self, bot_id, x, y, energy=100):
         super().__init__(bot_id, x, y, energy)
-        self.energy_depletion_rate = 7
-        self.type = "gatherer_bot"
+        self.type = 'gatherer_bot'
         self.color = "light sea green"
 
 class RepairBot(SurvivorBot):
-    def __init__(self, bot_id, x, y, energy=100):
+    def __init__(self, bot_id, x, y, energy=120):
         super().__init__(bot_id, x, y, energy)
-        self.type = "repair_bot"
+        self.type = 'repair_bot'
         self.color = "cornflower blue"
 
 class PlayerBot(SurvivorBot):
-    def __init__(self, bot_id, x, y, energy=100):
+    def __init__(self, bot_id, x, y, energy=150):
         super().__init__(bot_id, x, y, energy)
-        self.type = "player_bot"
+        self.type = 'player_bot'
         self.color = "orange"
+        self.energy_depletion_rate = 0.04
         
     def update(self, grid):
-        pass
+        """Player bot's state is mostly controlled manually."""
+        if self.energy <= 0:
+            return
+        self.energy -= self.energy_depletion_rate
+        self.update_enhancements(grid)
