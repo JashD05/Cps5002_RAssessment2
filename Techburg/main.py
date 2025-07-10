@@ -10,7 +10,10 @@ class App:
         self.master.title("Techburg Simulation")
         self.master.configure(bg="gray10")
 
-        self.SIMULATION_SPEED = 100 
+        # --- Simulation Speed Control ---
+        self.SPEED_LEVELS = [("x0.5", 500), ("x1", 250), ("x2", 100), ("x4", 50)]
+        self.current_speed_index = 1 # Default to x1 speed
+        
         self.simulation_paused = False
         
         # --- Main UI Frame ---
@@ -42,6 +45,7 @@ class App:
         self.start_new_game()
 
     def log_message(self, message):
+        """Adds a message to the activity log widget."""
         self.log_widget.configure(state='normal')
         self.log_widget.insert(tk.END, message + "\n")
         self.log_widget.see(tk.END)
@@ -49,27 +53,41 @@ class App:
 
     def create_buttons(self, parent_frame):
         button_frame = tk.Frame(parent_frame, bg="gray10"); button_frame.pack(fill=tk.X, pady=5)
-        self.pause_button = tk.Button(button_frame, text="Pause", command=self.toggle_pause, width=10); self.pause_button.pack(side=tk.LEFT)
+        
+        self.pause_button = tk.Button(button_frame, text="Pause", command=self.toggle_pause, width=10); self.pause_button.pack(side=tk.LEFT, padx=(0, 10))
+        
+        tk.Button(button_frame, text="Slower <<", command=lambda: self.change_speed(-1)).pack(side=tk.LEFT)
+        self.speed_label = tk.Label(button_frame, text=f"Speed: {self.SPEED_LEVELS[self.current_speed_index][0]}", width=10, fg="white", bg="gray10")
+        self.speed_label.pack(side=tk.LEFT)
+        tk.Button(button_frame, text=">> Faster", command=lambda: self.change_speed(1)).pack(side=tk.LEFT)
+
         quit_button = tk.Button(button_frame, text="Quit Game", command=self.master.destroy, bg="dark red", fg="white", activebackground="red"); quit_button.pack(side=tk.RIGHT, padx=5)
         tk.Button(button_frame, text="Try Again", command=self.start_new_game, bg="steel blue", fg="white", activebackground="light blue").pack(side=tk.RIGHT)
+        
         self.master.bind('<space>', self.toggle_pause)
         self.master.bind('<KeyPress-w>', lambda e: self.move_player(0, -1)); self.master.bind('<KeyPress-s>', lambda e: self.move_player(0, 1))
         self.master.bind('<KeyPress-a>', lambda e: self.move_player(-1, 0)); self.master.bind('<KeyPress-d>', lambda e: self.move_player(1, 0))
 
     def start_new_game(self):
+        """Initializes or resets the simulation state."""
         self.simulation_paused = False
         if hasattr(self, 'pause_button'): self.pause_button.config(text="Pause")
         self.log_widget.configure(state='normal'); self.log_widget.delete(1.0, tk.END); self.log_widget.configure(state='disabled')
         
         self.grid = Grid(self.GRID_WIDTH, self.GRID_HEIGHT, self.log_message)
         self.player_bot = self.grid.populate_world(
-            num_parts=50, num_stations=5, num_drones=5, 
-            num_swarms=4, num_gatherers=6, num_repair_bots=3
+            num_parts=50, num_stations=5, num_drones=4, 
+            num_swarms=3, num_gatherers=6, num_repair_bots=3
         )
         self.initial_survivor_count = len(self.grid.get_all_bots())
         
         self.log_message("[INFO] New simulation started.")
         self.simulation_step()
+
+    def change_speed(self, delta):
+        """Changes the simulation speed."""
+        self.current_speed_index = max(0, min(len(self.SPEED_LEVELS) - 1, self.current_speed_index + delta))
+        self.speed_label.config(text=f"Speed: {self.SPEED_LEVELS[self.current_speed_index][0]}")
 
     def toggle_pause(self, event=None):
         self.simulation_paused = not self.simulation_paused
@@ -90,18 +108,17 @@ class App:
     def simulation_step(self):
         if self.simulation_paused or 'normal' != self.master.state(): return
         
-        game_is_over = False
+        game_is_over, reason = False, ""
         if self.grid.initial_part_count > 0 and self.grid.parts_collected >= self.grid.initial_part_count:
             self.draw_grid(); self.game_won(); game_is_over = True
-        elif not self.grid.get_all_bots(): # Check if the list of all bots is empty
-            self.draw_grid(); self.game_over("All survivor bots were eliminated!"); game_is_over = True
-        elif self.player_bot and self.player_bot.energy <= 0:
+        elif not self.player_bot or self.player_bot.energy <= 0:
             self.draw_grid(); self.game_over("Your bot ran out of energy!"); game_is_over = True
         
         if not game_is_over:
             self.grid.update_world()
             self.draw_grid()
-            self.master.after(self.SIMULATION_SPEED, self.simulation_step)
+            current_delay = self.SPEED_LEVELS[self.current_speed_index][1]
+            self.master.after(current_delay, self.simulation_step)
 
     def draw_grid(self):
         self.canvas.delete("all")
@@ -124,21 +141,14 @@ class App:
         self.status_text.set(status_string)
 
     def game_won(self):
-        """Displays a 'You Win!' message on the canvas."""
         self.log_message("[SUCCESS] All parts collected. You win!")
-        bold_font = tkFont.Font(family="Helvetica", size=32, weight="bold")
-        # **THE FIX:** Added "Congratulations!" to the win message.
-        self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2, text="Congratulations!\nYOU WIN!", font=bold_font, fill="lawn green", justify=tk.CENTER)
+        self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2, text="Congratulations!\nYOU WIN!", font=("Helvetica", 32, "bold"), fill="lawn green", justify=tk.CENTER)
 
     def game_over(self, reason=""):
-        """Displays a 'Game Over' message with a reason."""
         self.log_message(f"[FAILURE] Game Over: {reason}")
-        bold_font = tkFont.Font(family="Helvetica", size=40, weight="bold")
-        reason_font = tkFont.Font(family="Helvetica", size=14)
-        self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2 - 20, text="GAME OVER", font=bold_font, fill="red")
-        # **THE FIX:** This now correctly displays the reason for the game ending.
+        self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2, text="GAME OVER", font=("Helvetica", 40, "bold"), fill="red")
         if reason:
-            self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2 + 25, text=reason, font=reason_font, fill="white")
+            self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2 + 25, text=reason, font=("Helvetica", 14), fill="white")
 
 if __name__ == "__main__":
     root = tk.Tk()
