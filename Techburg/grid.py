@@ -10,8 +10,6 @@ class Grid:
     def __init__(self, width, height):
         self.width = width
         self.height = height
-        # --- DEBUG LINE ---
-        print(f"[DEBUG] Grid Created: width={self.width}, height={self.height}")
         self.entities = []
         self.parts_collected = 0
 
@@ -43,8 +41,7 @@ class Grid:
         
     def get_all_bots(self):
         """Returns a list of all bot objects."""
-        bot_types = ['player_bot', 'gatherer_bot', 'repair_bot', 'survivor_bot']
-        return [e for e in self.entities if hasattr(e, 'type') and e.type in bot_types]
+        return [e for e in self.entities if isinstance(e, SurvivorBot)]
 
     def increment_parts_collected(self):
         """Increments the counter for collected parts."""
@@ -76,26 +73,14 @@ class Grid:
 
     def add_at_empty(self, entity):
         """Adds an entity to a random empty cell."""
-        # --- DEBUG LINE ---
-        if self.height <= 0:
-            print(f"[DEBUG] ERROR: Grid height is {self.height}. Cannot generate random y-coordinate.")
-            # Set a default y to prevent a crash
-            y = 0
-        else:
+        while True:
+            x = random.randint(0, self.width - 1)
             y = random.randint(0, self.height - 1)
-
-        x = random.randint(0, self.width - 1)
-        
-        # --- DEBUG LINE ---
-        print(f"[DEBUG] Attempting to place {entity.type} at ({x}, {y})")
-        
-        if not self.get_entity(x, y):
-            entity.x = x
-            entity.y = y
-            self.add_entity(entity)
-        else:
-            # If the spot is taken, try again (simple retry logic)
-            self.add_at_empty(entity)
+            if not self.get_entity(x, y):
+                entity.x = x
+                entity.y = y
+                self.add_entity(entity)
+                break
 
     def update_world(self):
         """Updates all entities and removes those with no energy."""

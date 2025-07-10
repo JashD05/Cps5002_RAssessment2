@@ -11,12 +11,10 @@ class SurvivorBot:
         self.y = y
         self.energy = energy
         
-        # Base stats
         self.base_max_energy = 100
         self.base_speed = 1
         self.base_vision = 5
         
-        # Current stats
         self.max_energy = self.base_max_energy
         self.speed = self.base_speed
         self.vision = self.base_vision
@@ -34,34 +32,25 @@ class SurvivorBot:
 
     def update(self, grid):
         """Main update logic for the bot."""
-        if self.energy <= 0:
-            return # Bot is out of energy, do nothing
-            
+        if self.energy <= 0: return
         if self.stunned > 0:
             self.stunned -= 1
             return
             
         self.energy -= self.energy_depletion_rate
-        self.update_enhancements(grid)
-        
+        self.update_enhancements()
         self.execute_state_action(grid)
 
     def execute_state_action(self, grid):
         """Determines the bot's state and acts accordingly."""
-        # 1. Decide what the goal is
         if self.energy < 30:
-            self.state = "FLEEING_TO_STATION"
             self.target_entity = self.find_nearest_target(grid, 'recharge_station')
         elif self.carrying_part:
-            self.state = "MOVING_TO_STATION"
             self.target_entity = self.find_nearest_target(grid, 'recharge_station')
         else:
-            self.state = "SEARCHING"
             self.target_entity = self.find_nearest_target(grid, 'spare_part')
 
-        # 2. Act on the goal
         if self.target_entity:
-            # Check if we have arrived at the target
             if self.x == self.target_entity.x and self.y == self.target_entity.y:
                 if self.target_entity.type == 'recharge_station':
                     self.energy = self.max_energy
@@ -70,10 +59,8 @@ class SurvivorBot:
                         self.carrying_part = None
                 elif self.target_entity.type == 'spare_part':
                     self.pickup_part(self.target_entity, grid)
-                
-                self.target_entity = None # Clear target to find a new one next turn
+                self.target_entity = None
             else:
-                # If not at the target, move towards it
                 self.move_towards(self.target_entity, grid)
 
     def move_towards(self, target, grid):
@@ -85,14 +72,9 @@ class SurvivorBot:
 
     def find_nearest_target(self, grid, target_type):
         """Finds the nearest visible target of a given type."""
-        targets = [e for e in grid.entities if e.type == target_type]
-        if not targets:
-            return None
-            
-        visible_targets = [t for t in targets if math.hypot(self.x-t.x, self.y-t.y) <= self.vision]
-        if not visible_targets:
-            return None
-        return min(visible_targets, key=lambda t: math.hypot(self.x-t.x, self.y-t.y))
+        targets = [e for e in grid.entities if hasattr(e, 'type') and e.type == target_type]
+        if not targets: return None
+        return min(targets, key=lambda t: math.hypot(self.x - t.x, self.y - t.y))
 
     def pickup_part(self, part, grid):
         """Picks up a part and applies its enhancement."""
@@ -108,54 +90,35 @@ class SurvivorBot:
         self.active_enhancements[enhancement_type] = life
         self.recalculate_stats()
 
-    def update_enhancements(self, grid):
+    def update_enhancements(self):
         """Corrodes enhancements and removes them when they expire."""
-        expired = []
-        for enhancement, life in self.active_enhancements.items():
-            self.active_enhancements[enhancement] -= 1
-            if self.active_enhancements[enhancement] <= 0:
-                expired.append(enhancement)
-        
-        if expired:
-            for enhancement in expired:
-                del self.active_enhancements[enhancement]
-            self.recalculate_stats()
+        expired = [e for e, life in self.active_enhancements.items() if life <= 0]
+        for e in expired:
+            del self.active_enhancements[e]
+        if expired: self.recalculate_stats()
+        for e in self.active_enhancements: self.active_enhancements[e] -= 1
 
     def recalculate_stats(self):
         """Recalculates bot stats based on active enhancements."""
-        self.max_energy = self.base_max_energy
-        self.speed = self.base_speed
-        self.vision = self.base_vision
-        if 'energy_capacity' in self.active_enhancements:
-            self.max_energy += 50
-        if 'speed' in self.active_enhancements:
-            self.speed = self.base_speed * 1.5
-        if 'vision' in self.active_enhancements:
-            self.vision = self.base_vision + 3
+        self.max_energy = self.base_max_energy + (50 if 'energy_capacity' in self.active_enhancements else 0)
+        self.speed = self.base_speed * (1.5 if 'speed' in self.active_enhancements else 1)
+        self.vision = self.base_vision + (3 if 'vision' in self.active_enhancements else 0)
 
-# --- Subclasses ---
 class GathererBot(SurvivorBot):
     def __init__(self, bot_id, x, y, energy=100):
         super().__init__(bot_id, x, y, energy)
-        self.type = 'gatherer_bot'
-        self.color = "light sea green"
+        self.type = 'gatherer_bot'; self.color = "light sea green"
 
 class RepairBot(SurvivorBot):
     def __init__(self, bot_id, x, y, energy=120):
         super().__init__(bot_id, x, y, energy)
-        self.type = 'repair_bot'
-        self.color = "cornflower blue"
+        self.type = 'repair_bot'; self.color = "cornflower blue"
 
 class PlayerBot(SurvivorBot):
     def __init__(self, bot_id, x, y, energy=150):
         super().__init__(bot_id, x, y, energy)
-        self.type = 'player_bot'
-        self.color = "orange"
-        self.energy_depletion_rate = 0.04
+        self.type = 'player_bot'; self.color = "orange"; self.energy_depletion_rate = 0.04
         
     def update(self, grid):
-        """Player bot's state is mostly controlled manually."""
-        if self.energy <= 0:
-            return
-        self.energy -= self.energy_depletion_rate
-        self.update_enhancements(grid)
+        if self.energy <= 0: return
+        self.energy -= self.energy_depletion_rate; self.update_enhancements()
