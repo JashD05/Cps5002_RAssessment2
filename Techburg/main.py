@@ -1,50 +1,37 @@
 # Techburg/main.py
 import tkinter as tk
 from tkinter import font as tkFont, scrolledtext
-import random
-import sys
-import os
 from grid import Grid
 from agents.survivor_bot import SurvivorBot
 
 class App:
     def __init__(self, master):
         self.master = master
-        self.master.title("Techburg Simulation")
+        self.master.title("Techburg Simulation (Advanced AI)")
         self.master.configure(bg="gray10")
         self.SIMULATION_SPEED = 100 
         self.simulation_paused = False
         
-        self.top_frame = tk.Frame(self.master, bg="gray10")
-        self.top_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
-        left_frame = tk.Frame(self.top_frame, bg="gray10")
-        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        right_frame = tk.Frame(self.top_frame, bg="gray10")
-        right_frame.pack(side=tk.RIGHT, padx=(10, 0), fill=tk.Y)
+        self.top_frame = tk.Frame(self.master, bg="gray10"); self.top_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        left_frame = tk.Frame(self.top_frame, bg="gray10"); left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        right_frame = tk.Frame(self.top_frame, bg="gray10"); right_frame.pack(side=tk.RIGHT, padx=(10, 0), fill=tk.Y)
 
         tk.Label(right_frame, text="Activity Log", fg="white", bg="gray10", font=("Helvetica", 12, "bold")).pack(anchor='w')
         self.log_widget = scrolledtext.ScrolledText(right_frame, width=50, height=30, bg="black", fg="lawn green", font=("Consolas", 9), relief=tk.SUNKEN, borderwidth=1)
-        self.log_widget.pack(fill=tk.BOTH, expand=True)
-        self.log_widget.configure(state='disabled')
+        self.log_widget.pack(fill=tk.BOTH, expand=True); self.log_widget.configure(state='disabled')
 
         self.GRID_WIDTH, self.GRID_HEIGHT, self.CELL_SIZE = 40, 30, 20
-        self.canvas = tk.Canvas(left_frame, width=self.GRID_WIDTH*self.CELL_SIZE, height=self.GRID_HEIGHT*self.CELL_SIZE, bg='black', highlightthickness=0)
-        self.canvas.pack()
+        self.canvas = tk.Canvas(left_frame, width=self.GRID_WIDTH*self.CELL_SIZE, height=self.GRID_HEIGHT*self.CELL_SIZE, bg='black', highlightthickness=0); self.canvas.pack()
 
-        status_frame = tk.Frame(left_frame, bg="gray25", relief=tk.SUNKEN, borderwidth=1)
-        status_frame.pack(fill=tk.X, pady=(5,0))
+        status_frame = tk.Frame(left_frame, bg="gray25", relief=tk.SUNKEN, borderwidth=1); status_frame.pack(fill=tk.X, pady=(5,0))
         self.status_text = tk.StringVar()
-        self.status_bar = tk.Label(status_frame, textvariable=self.status_text, anchor=tk.W, fg="white", bg="gray25", font=("Consolas", 10), padx=5)
-        self.status_bar.pack(fill=tk.X)
+        self.status_bar = tk.Label(status_frame, textvariable=self.status_text, anchor=tk.W, fg="white", bg="gray25", font=("Consolas", 10), padx=5); self.status_bar.pack(fill=tk.X)
 
         self.create_buttons(left_frame)
         self.start_new_game()
 
     def log_message(self, message):
-        self.log_widget.configure(state='normal')
-        self.log_widget.insert(tk.END, message + "\n")
-        self.log_widget.see(tk.END)
-        self.log_widget.configure(state='disabled')
+        self.log_widget.configure(state='normal'); self.log_widget.insert(tk.END, message + "\n"); self.log_widget.see(tk.END); self.log_widget.configure(state='disabled')
 
     def create_buttons(self, parent_frame):
         button_frame = tk.Frame(parent_frame, bg="gray10"); button_frame.pack(fill=tk.X, pady=5)
@@ -52,8 +39,8 @@ class App:
         quit_button = tk.Button(button_frame, text="Quit Game", command=self.master.destroy, bg="dark red", fg="white", activebackground="red"); quit_button.pack(side=tk.RIGHT, padx=5)
         tk.Button(button_frame, text="Try Again", command=self.start_new_game, bg="steel blue", fg="white", activebackground="light blue").pack(side=tk.RIGHT)
         self.master.bind('<space>', self.toggle_pause)
-        self.master.bind('<KeyPress-w>', lambda e: self.move_player(0, -1)); self.master.bind('<KeyPress-s>', lambda e: self.move_player(0, 1))
-        self.master.bind('<KeyPress-a>', lambda e: self.move_player(-1, 0)); self.master.bind('<KeyPress-d>', lambda e: self.move_player(1, 0))
+        self.master.bind('<KeyPress-w>', lambda e:self.move_player(0, -1)); self.master.bind('<KeyPress-s>', lambda e:self.move_player(0, 1))
+        self.master.bind('<KeyPress-a>', lambda e:self.move_player(-1, 0)); self.master.bind('<KeyPress-d>', lambda e:self.move_player(1, 0))
 
     def start_new_game(self):
         self.simulation_paused = False
@@ -61,10 +48,7 @@ class App:
         self.log_widget.configure(state='normal'); self.log_widget.delete(1.0, tk.END); self.log_widget.configure(state='disabled')
         
         self.grid = Grid(self.GRID_WIDTH, self.GRID_HEIGHT, self.log_message)
-        self.player_bot = self.grid.populate_world(
-            num_parts=50, num_stations=5, num_drones=5, 
-            num_swarms=4, num_gatherers=6, num_repair_bots=3
-        )
+        self.player_bot = self.grid.populate_world(num_parts=50, num_stations=5, num_drones=5, num_swarms=4, num_gatherers=6, num_repair_bots=3)
         self.initial_survivor_count = len(self.grid.get_all_bots())
         
         self.log_message("[INFO] New simulation started.")
@@ -87,13 +71,12 @@ class App:
     def simulation_step(self):
         if self.simulation_paused or 'normal' != self.master.state(): return
         
+        # Check end conditions
         game_is_over, reason = False, ""
         if self.grid.initial_part_count > 0 and (self.grid.parts_collected + self.grid.parts_corroded) >= self.grid.initial_part_count:
             self.draw_grid(); self.game_won(); game_is_over = True
         elif not self.grid.get_all_bots():
             self.draw_grid(); self.game_over("All survivor bots were eliminated!"); game_is_over = True
-        elif self.player_bot and self.player_bot.energy <= 0:
-            self.draw_grid(); self.game_over("Your bot ran out of energy!"); game_is_over = True
         
         if not game_is_over:
             self.grid.update_world()
