@@ -1,6 +1,9 @@
 # Techburg/main.py
 import tkinter as tk
 from tkinter import font as tkFont, scrolledtext
+import random
+import sys
+import os
 from grid import Grid
 from agents.survivor_bot import SurvivorBot
 
@@ -9,7 +12,6 @@ class App:
         self.master = master
         self.master.title("Techburg Simulation")
         self.master.configure(bg="gray10")
-
         self.SIMULATION_SPEED = 100 
         self.simulation_paused = False
         
@@ -25,7 +27,7 @@ class App:
         self.log_widget.pack(fill=tk.BOTH, expand=True)
         self.log_widget.configure(state='disabled')
 
-        self.GRID_WIDTH, self.GRID_HEIGHT, self.CELL_SIZE = 30, 20, 20
+        self.GRID_WIDTH, self.GRID_HEIGHT, self.CELL_SIZE = 40, 30, 20
         self.canvas = tk.Canvas(left_frame, width=self.GRID_WIDTH*self.CELL_SIZE, height=self.GRID_HEIGHT*self.CELL_SIZE, bg='black', highlightthickness=0)
         self.canvas.pack()
 
@@ -39,7 +41,6 @@ class App:
         self.start_new_game()
 
     def log_message(self, message):
-        """Adds a message to the activity log widget."""
         self.log_widget.configure(state='normal')
         self.log_widget.insert(tk.END, message + "\n")
         self.log_widget.see(tk.END)
@@ -55,7 +56,6 @@ class App:
         self.master.bind('<KeyPress-a>', lambda e: self.move_player(-1, 0)); self.master.bind('<KeyPress-d>', lambda e: self.move_player(1, 0))
 
     def start_new_game(self):
-        """Initializes or resets the simulation state."""
         self.simulation_paused = False
         if hasattr(self, 'pause_button'): self.pause_button.config(text="Pause")
         self.log_widget.configure(state='normal'); self.log_widget.delete(1.0, tk.END); self.log_widget.configure(state='disabled')
@@ -78,22 +78,21 @@ class App:
 
     def move_player(self, dx, dy):
         if not self.simulation_paused and self.player_bot and self.player_bot.energy > 0:
-            # --- THE FIX: Log player movement ---
-            self.grid.log(f"[PLAYER] Moved ({dx}, {dy}).")
             new_x, new_y = self.player_bot.x + dx, self.player_bot.y + dy
             entity = self.grid.get_entity(new_x % self.grid.width, new_y % self.grid.height)
             if not entity or entity.type in ['spare_part', 'recharge_station']:
                 self.grid.move_entity(self.player_bot, new_x, new_y)
-                if entity and entity.type == 'spare_part':
-                    self.player_bot.pickup_part(entity, self.grid)
+                if entity and entity.type == 'spare_part': self.player_bot.pickup_part(entity, self.grid)
 
     def simulation_step(self):
         if self.simulation_paused or 'normal' != self.master.state(): return
         
         game_is_over, reason = False, ""
-        if self.grid.initial_part_count > 0 and self.grid.parts_collected >= self.grid.initial_part_count:
+        if self.grid.initial_part_count > 0 and (self.grid.parts_collected + self.grid.parts_corroded) >= self.grid.initial_part_count:
             self.draw_grid(); self.game_won(); game_is_over = True
-        elif not self.player_bot or self.player_bot.energy <= 0:
+        elif not self.grid.get_all_bots():
+            self.draw_grid(); self.game_over("All survivor bots were eliminated!"); game_is_over = True
+        elif self.player_bot and self.player_bot.energy <= 0:
             self.draw_grid(); self.game_over("Your bot ran out of energy!"); game_is_over = True
         
         if not game_is_over:
@@ -122,14 +121,13 @@ class App:
         self.status_text.set(status_string)
 
     def game_won(self):
-        self.log_message("[SUCCESS] All parts collected. You win!")
+        self.log_message("[SUCCESS] All parts accounted for. You win!")
         self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2, text="Congratulations!\nYOU WIN!", font=("Helvetica", 32, "bold"), fill="lawn green", justify=tk.CENTER)
 
     def game_over(self, reason=""):
         self.log_message(f"[FAILURE] Game Over: {reason}")
         self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2, text="GAME OVER", font=("Helvetica", 40, "bold"), fill="red")
-        if reason:
-            self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2 + 25, text=reason, font=("Helvetica", 14), fill="white")
+        if reason: self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2 + 25, text=reason, font=("Helvetica", 14), fill="white")
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -1,5 +1,6 @@
 # Techburg/agents/survivor_bot.py
 import math
+import random
 from entities import SparePart
 
 class SurvivorBot:
@@ -7,16 +8,16 @@ class SurvivorBot:
         self.bot_id = bot_id; self.x = x; self.y = y; self.energy = energy
         self.base_max_energy = 200; self.base_speed = 1; self.base_vision = 5
         self.max_energy, self.speed, self.vision = self.base_max_energy, self.base_speed, self.base_vision
-        self.energy_depletion_rate = 0.08
+        self.energy_depletion_rate = 0.1
         self.carrying_part, self.target_entity = None, None
         self.type = 'survivor_bot'; self.color = "deep sky blue"
         self.stunned, self.active_enhancements = 0, {}
 
     def update(self, grid):
         if self.energy <= 0: return
-        if self.stunned > 0: self.stunned -= 1; grid.log(f"[STATUS] {self.bot_id} is stunned."); return
+        if self.stunned > 0: self.stunned -= 1; return
         self.energy -= self.energy_depletion_rate
-        self.update_enhancements(grid)
+        self.update_enhancements()
         self.execute_state_action(grid)
 
     def execute_state_action(self, grid):
@@ -28,23 +29,17 @@ class SurvivorBot:
                 self.handle_arrival(self.target_entity, grid)
             else:
                 self.move_towards(self.target_entity, grid)
-        else:
-             grid.log(f"[AI] {self.bot_id} is idle, no targets found.")
 
     def get_new_goal(self, grid):
-        target = None
         if self.energy < self.max_energy * 0.4:
-            target = self.find_nearest_target(grid, 'recharge_station')
-            if target: grid.log(f"[AI] {self.bot_id} is low on energy, moving to station at ({target.x},{target.y}).")
+            self.target_entity = self.find_nearest_target(grid, 'recharge_station')
         elif self.carrying_part:
-            target = self.find_nearest_target(grid, 'recharge_station')
-            if target: grid.log(f"[AI] {self.bot_id} delivering part to station at ({target.x},{target.y}).")
+            self.target_entity = self.find_nearest_target(grid, 'recharge_station')
         else:
-            target = self.find_nearest_target(grid, 'spare_part')
-            if target: grid.log(f"[AI] {self.bot_id} searching for part at ({target.x},{target.y}).")
-        self.target_entity = target
+            self.target_entity = self.find_nearest_target(grid, 'spare_part')
     
     def move_towards(self, target, grid):
+        """Moves one step directly towards the target without pathfinding."""
         dx, dy = 0, 0
         if target.x > self.x: dx = 1
         elif target.x < self.x: dx = -1
@@ -55,14 +50,9 @@ class SurvivorBot:
 
     def handle_arrival(self, entity, grid):
         if entity.type == 'recharge_station':
-            grid.log(f"[EVENT] {self.bot_id} recharged to {int(self.max_energy)} energy.")
             self.energy = self.max_energy
-            if self.carrying_part: 
-                grid.increment_parts_collected()
-                grid.log(f"[SUCCESS] {self.bot_id} delivered a {self.carrying_part.size} part! Total: {grid.parts_collected}")
-                self.carrying_part = None
-        elif entity.type == 'spare_part':
-            self.pickup_part(entity, grid)
+            if self.carrying_part: grid.increment_parts_collected(); self.carrying_part = None
+        elif entity.type == 'spare_part': self.pickup_part(entity, grid)
         self.target_entity = None
 
     def find_nearest_target(self, grid, target_type):
@@ -71,21 +61,16 @@ class SurvivorBot:
 
     def pickup_part(self, part, grid):
         if not self.carrying_part and part in grid.entities:
-            grid.log(f"[EVENT] {self.bot_id} picked up a {part.size} part.")
             self.carrying_part = part
-            grid.remove_entity(part)
-            self.apply_enhancement(part, grid)
+            grid.remove_entity(part); self.apply_enhancement(part)
             
-    def apply_enhancement(self, part, grid):
-        grid.log(f"[UPGRADE] {self.bot_id} gained a {part.enhancement_type} enhancement!")
+    def apply_enhancement(self, part):
         self.active_enhancements[part.enhancement_type] = getattr(part, 'max_corrosion', 1000)
         self.recalculate_stats()
 
-    def update_enhancements(self, grid):
+    def update_enhancements(self):
         expired = [e for e, life in self.active_enhancements.items() if life <= 0]
-        for e in expired:
-            grid.log(f"[EVENT] {self.bot_id}'s {e} enhancement wore off.")
-            del self.active_enhancements[e]
+        for e in expired: del self.active_enhancements[e]
         if expired: self.recalculate_stats()
         for e in self.active_enhancements: self.active_enhancements[e] -= 1
 
@@ -102,4 +87,4 @@ class PlayerBot(SurvivorBot):
     def __init__(self, bot_id, x, y): super().__init__(bot_id, x, y, energy=300); self.type = 'player_bot'; self.color = "orange"; self.energy_depletion_rate = 0.08
     def update(self, grid):
         if self.energy <= 0: return
-        self.energy -= self.energy_depletion_rate; self.update_enhancements(grid)
+        self.energy -= self.energy_depletion_rate; self.update_enhancements()

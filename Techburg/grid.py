@@ -7,39 +7,41 @@ from entities import SparePart, RechargeStation
 
 class Grid:
     def __init__(self, width, height, logger_func=None):
-        self.width = width
-        self.height = height
-        self.entities = []
-        self.parts_collected = 0
-        self.initial_part_count = 0
+        self.width = width; self.height = height
+        self.entities = []; self.parts_collected = 0
+        self.initial_part_count = 0; self.parts_corroded = 0
         self.log = logger_func if logger_func else lambda message: None
+        self.known_part_locations = set()
 
-    def is_valid(self, x, y):
-        return 0 <= x < self.width and 0 <= y < self.height
+    def is_valid(self, x, y): return 0 <= x < self.width and 0 <= y < self.height
 
     def get_entity(self, x, y):
         for entity in self.entities:
             if entity.x == x and entity.y == y: return entity
         return None
+    
+    def get_bots_at_location(self, x, y):
+        return [e for e in self.entities if isinstance(e, SurvivorBot) and e.x == x and e.y == y]
 
     def add_entity(self, entity):
         if self.is_valid(entity.x, entity.y): self.entities.append(entity)
 
     def remove_entity(self, entity):
-        if entity in self.entities: self.entities.remove(entity)
+        if entity in self.entities:
+            if isinstance(entity, SparePart) and (entity.x, entity.y) in self.known_part_locations:
+                self.known_part_locations.remove((entity.x, entity.y))
+            self.entities.remove(entity)
 
     def move_entity(self, entity, new_x, new_y):
-        entity.x = new_x % self.width
-        entity.y = new_y % self.height
+        entity.x = new_x % self.width; entity.y = new_y % self.height
         
-    def get_all_bots(self):
-        return [e for e in self.entities if isinstance(e, SurvivorBot)]
+    def get_all_bots(self): return [e for e in self.entities if isinstance(e, SurvivorBot)]
     
-    def get_threats(self):
-        return [e for e in self.entities if isinstance(e, (MalfunctioningDrone, ScavengerSwarm))]
+    def get_threats(self): return [e for e in self.entities if isinstance(e, (MalfunctioningDrone, ScavengerSwarm))]
 
-    def increment_parts_collected(self):
-        self.parts_collected += 1
+    def increment_parts_collected(self): self.parts_collected += 1
+    
+    def increment_parts_corroded(self): self.parts_corroded += 1
 
     def populate_world(self, num_parts, num_stations, num_drones, num_swarms, num_gatherers, num_repair_bots):
         self.initial_part_count = num_parts
@@ -47,15 +49,8 @@ class Grid:
         entities_to_place = [player_instance]
         for i in range(num_gatherers): entities_to_place.append(GathererBot(f'gatherer_{i}', 0, 0))
         for i in range(num_repair_bots): entities_to_place.append(RepairBot(f'repair_{i}', 0, 0))
-        
-        # --- THE FIX: Log threat spawning ---
-        for _ in range(num_drones):
-            entities_to_place.append(MalfunctioningDrone(0, 0))
-            self.log("[SPAWN] A Malfunctioning Drone appeared!")
-        for _ in range(num_swarms):
-            entities_to_place.append(ScavengerSwarm(0, 0))
-            self.log("[SPAWN] A Scavenger Swarm appeared!")
-
+        for _ in range(num_drones): entities_to_place.append(MalfunctioningDrone(0, 0))
+        for _ in range(num_swarms): entities_to_place.append(ScavengerSwarm(0, 0))
         for _ in range(num_parts): entities_to_place.append(SparePart(random.choice(['small', 'medium', 'large']), 0, 0))
         for _ in range(num_stations): entities_to_place.append(RechargeStation(0, 0))
 
@@ -73,7 +68,6 @@ class Grid:
     def update_world(self):
         for entity in self.entities[:]:
             if entity in self.entities: entity.update(self)
-        
         bots_to_remove = [e for e in self.get_all_bots() if hasattr(e, 'energy') and e.energy <= 0]
         if bots_to_remove:
             for bot in bots_to_remove:
