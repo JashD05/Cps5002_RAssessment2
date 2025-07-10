@@ -12,6 +12,7 @@ class Grid:
         self.height = height
         self.entities = []
         self.parts_collected = 0
+        self.initial_part_count = 0 # To track the total number of parts for the win condition
 
     def is_valid(self, x, y):
         """Checks if a given coordinate is within the grid boundaries."""
@@ -49,6 +50,8 @@ class Grid:
 
     def populate_world(self, num_parts, num_stations, num_drones, num_swarms, num_gatherers, num_repair_bots):
         """Populates the grid and returns the player_bot instance."""
+        self.initial_part_count = num_parts # Store the total number of parts
+
         entities_to_place = []
         player_instance = PlayerBot('player', 0, 0)
         entities_to_place.append(player_instance)

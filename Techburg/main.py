@@ -11,19 +11,18 @@ from agents.survivor_bot import PlayerBot, GathererBot, RepairBot, SurvivorBot
 GRID_WIDTH = 30
 GRID_HEIGHT = 20
 CELL_SIZE = 20
-SIMULATION_SPEED = 100 # Using a single, constant speed
+SIMULATION_SPEED = 100 
 
 def main():
     """Sets up and runs the simulation."""
     global grid, player_bot, window, canvas, status_bar, initial_survivor_count, simulation_paused, pause_button
 
-    # Initialize state variables
     simulation_paused = False
 
     grid = Grid(GRID_WIDTH, GRID_HEIGHT)
     
     player_bot = grid.populate_world(
-        num_parts=70,
+        num_parts=50,
         num_stations=5,
         num_drones=6,
         num_swarms=4,
@@ -45,18 +44,11 @@ def main():
     status_bar = tk.Label(status_frame, textvariable=status_text, anchor=tk.W, fg="white", bg="gray25", font=("Consolas", 10), padx=5); status_bar.pack(fill=tk.X)
     status_bar.text_var = status_text
 
-    # --- Button Frame ---
     button_frame = tk.Frame(main_frame, bg="gray10"); button_frame.pack(fill=tk.X, pady=5)
-    
-    # Pause Button
-    pause_button = tk.Button(button_frame, text="Pause", command=toggle_pause, width=10)
-    pause_button.pack(side=tk.LEFT)
-    
-    # Right-aligned buttons
+    pause_button = tk.Button(button_frame, text="Pause", command=toggle_pause, width=10); pause_button.pack(side=tk.LEFT)
     quit_button = tk.Button(button_frame, text="Quit Game", command=window.destroy, bg="dark red", fg="white", activebackground="red"); quit_button.pack(side=tk.RIGHT, padx=5)
     tk.Button(button_frame, text="Try Again", command=lambda: restart_program(window), bg="steel blue", fg="white", activebackground="light blue").pack(side=tk.RIGHT)
 
-    # --- Key Bindings ---
     window.bind('<KeyPress-w>', lambda e: move_player(0, -1)); window.bind('<KeyPress-s>', lambda e: move_player(0, 1))
     window.bind('<KeyPress-a>', lambda e: move_player(-1, 0)); window.bind('<KeyPress-d>', lambda e: move_player(1, 0))
     window.bind('<space>', toggle_pause)
@@ -88,11 +80,23 @@ def move_player(dx, dy):
 def simulation_step():
     """Runs one step of the simulation and schedules the next."""
     if simulation_paused or 'normal' != window.state(): return
-    if not (player_bot and player_bot in grid.entities):
-        draw_grid(); game_over()
+    
+    # --- Check for end conditions ---
+    # Win Condition
+    if grid.initial_part_count > 0 and grid.parts_collected >= grid.initial_part_count:
+        draw_grid()
+        game_won()
         return
 
-    grid.update_world(); draw_grid()
+    # **FIX:** Lose condition is now specifically when the player's energy is zero or less.
+    if player_bot.energy <= 0:
+        draw_grid()
+        game_over()
+        return
+
+    # If game is not over, continue
+    grid.update_world()
+    draw_grid()
     window.after(SIMULATION_SPEED, simulation_step)
 
 def draw_grid():
@@ -109,15 +113,26 @@ def draw_grid():
 
 def update_ui():
     """Updates the consolidated status bar."""
-    num_survivors = len(grid.get_all_bots())
+    all_bots = grid.get_all_bots()
+    num_survivors = len(all_bots)
     bots_destroyed = initial_survivor_count - num_survivors
-    player_energy = int(player_bot.energy) if player_bot and player_bot in grid.entities else "---"
-    status_string = (f"Player: Energy={player_energy} | Bots Active: {num_survivors} | Parts Collected: {grid.parts_collected}/50 | Bots Destroyed: {bots_destroyed}")
+    
+    # The player object is always available, even if its energy is <= 0
+    player_energy = int(player_bot.energy)
+    
+    parts_goal = grid.initial_part_count
+    status_string = (f"Player: Energy={player_energy} | Bots Active: {num_survivors} | Parts Collected: {grid.parts_collected}/{parts_goal} | Bots Destroyed: {bots_destroyed}")
     status_bar.text_var.set(status_string)
 
+def game_won():
+    """Displays a 'You Win!' message on the canvas."""
+    bold_font = tkFont.Font(family="Helvetica", size=40, weight="bold")
+    canvas.create_text(GRID_WIDTH * CELL_SIZE / 2, GRID_HEIGHT * CELL_SIZE / 2, text="YOU WIN!", font=bold_font, fill="lawn green")
+
 def game_over():
-    """Displays a game over message on the canvas."""
-    canvas.create_text(GRID_WIDTH*CELL_SIZE/2, GRID_HEIGHT*CELL_SIZE/2, text="GAME OVER", font=("Helvetica", 40, "bold"), fill="red")
+    """Displays a 'Game Over' message on the canvas."""
+    bold_font = tkFont.Font(family="Helvetica", size=40, weight="bold")
+    canvas.create_text(GRID_WIDTH*CELL_SIZE/2, GRID_HEIGHT*CELL_SIZE/2, text="GAME OVER", font=bold_font, fill="red")
 
 if __name__ == "__main__":
     main()

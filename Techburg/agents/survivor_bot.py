@@ -1,15 +1,22 @@
 # agents/survivor_bot.py
 import math
-from ai.pathfinding import find_path # Kept for potential future use, but not used in move_towards
+from ai.pathfinding import find_path 
 from entities import SparePart
 
 class SurvivorBot:
     """A bot that collects parts, uses enhancements, and collaborates."""
-    def __init__(self, bot_id, x, y, energy=100):
-        self.bot_id = bot_id; self.x = x; self.y = y; self.energy = energy
-        self.base_max_energy = 100; self.base_speed = 1; self.base_vision = 5
+    def __init__(self, bot_id, x, y, energy):
+        self.bot_id = bot_id; self.x = x; self.y = y
+        
+        self.base_max_energy = 200
+        self.energy = energy 
+        
+        self.base_speed = 1; self.base_vision = 5
         self.max_energy = self.base_max_energy; self.speed = self.base_speed; self.vision = self.base_vision
-        self.energy_depletion_rate = 0.05
+        
+        # **THE FIX:** Set to a standard, balanced depletion rate.
+        self.energy_depletion_rate = 0.08
+        
         self.carrying_part = None; self.path = []; self.state = "SEARCHING"
         self.type = 'survivor_bot'; self.color = "deep sky blue"
         self.stunned = 0; self.target_entity = None
@@ -28,10 +35,10 @@ class SurvivorBot:
     def execute_state_action(self, grid):
         """Determines the bot's state and acts accordingly."""
         if self.target_entity and self.target_entity not in grid.entities:
-            self.target_entity = None # Clear target if it has been collected/destroyed
+            self.target_entity = None 
 
         if not self.target_entity:
-            if self.energy < 30:
+            if self.energy < self.max_energy * 0.3:
                 self.target_entity = self.find_nearest_target(grid, 'recharge_station')
             elif self.carrying_part:
                 self.target_entity = self.find_nearest_target(grid, 'recharge_station')
@@ -60,7 +67,8 @@ class SurvivorBot:
         elif target.y < self.y: dy = -1
         
         new_x, new_y = self.x + dx, self.y + dy
-        if grid.is_valid(new_x, new_y):
+        entity_at_new_pos = grid.get_entity(new_x, new_y)
+        if grid.is_valid(new_x, new_y) and not (entity_at_new_pos and isinstance(entity_at_new_pos, SurvivorBot)):
             grid.move_entity(self, new_x, new_y)
 
     def find_nearest_target(self, grid, target_type):
@@ -78,9 +86,7 @@ class SurvivorBot:
 
     def apply_enhancement(self, part: SparePart):
         """Applies an enhancement from a part."""
-        enhancement_type = part.enhancement_type
-        life = part.max_corrosion - part.corrosion_level
-        self.active_enhancements[enhancement_type] = life
+        self.active_enhancements[part.enhancement_type] = part.max_corrosion - part.corrosion_level
         self.recalculate_stats()
 
     def update_enhancements(self):
@@ -92,25 +98,27 @@ class SurvivorBot:
 
     def recalculate_stats(self):
         """Recalculates bot stats based on enhancements."""
-        self.max_energy = self.base_max_energy + (50 if 'energy_capacity' in self.active_enhancements else 0)
+        self.max_energy = self.base_max_energy + (100 if 'energy_capacity' in self.active_enhancements else 0)
         self.speed = self.base_speed * (1.5 if 'speed' in self.active_enhancements else 1)
         self.vision = self.base_vision + (3 if 'vision' in self.active_enhancements else 0)
 
 # --- Subclasses ---
 class GathererBot(SurvivorBot):
-    def __init__(self, bot_id, x, y, energy=100):
-        super().__init__(bot_id, x, y, energy)
+    def __init__(self, bot_id, x, y):
+        super().__init__(bot_id, x, y, energy=200)
         self.type = 'gatherer_bot'; self.color = "light sea green"
 
 class RepairBot(SurvivorBot):
-    def __init__(self, bot_id, x, y, energy=120):
-        super().__init__(bot_id, x, y, energy)
+    def __init__(self, bot_id, x, y):
+        super().__init__(bot_id, x, y, energy=250)
         self.type = 'repair_bot'; self.color = "cornflower blue"
 
 class PlayerBot(SurvivorBot):
-    def __init__(self, bot_id, x, y, energy=150):
-        super().__init__(bot_id, x, y, energy)
-        self.type = 'player_bot'; self.color = "orange"; self.energy_depletion_rate = 0.04
+    def __init__(self, bot_id, x, y):
+        super().__init__(bot_id, x, y, energy=300)
+        self.type = 'player_bot'; self.color = "orange"
+        # The player is slightly more efficient
+        self.energy_depletion_rate = 0.06
         
     def update(self, grid):
         """Player bot's state is mostly controlled manually."""
