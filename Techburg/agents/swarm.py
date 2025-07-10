@@ -52,4 +52,4 @@ class ScavengerSwarm:
         else: dx, dy = random.choice([(0,1), (0,-1), (1,0), (-1,0)])
         
         new_x, new_y = self.x+dx, self.y+dy
-        if grid.is_valid(new_x, new_y): grid.move_entity(self, new_x, new_y)
+        grid.move_entity(self, new_x, new_y)

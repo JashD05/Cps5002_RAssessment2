@@ -10,24 +10,18 @@ class App:
         self.master.title("Techburg Simulation")
         self.master.configure(bg="gray10")
 
-        # --- Simulation Speed Control ---
-        self.SPEED_LEVELS = [("x0.5", 500), ("x1", 250), ("x2", 100), ("x4", 50)]
-        self.current_speed_index = 1 # Default to x1 speed
-        
+        self.SIMULATION_SPEED = 100 
         self.simulation_paused = False
         
-        # --- Main UI Frame ---
         self.top_frame = tk.Frame(self.master, bg="gray10")
         self.top_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
-
         left_frame = tk.Frame(self.top_frame, bg="gray10")
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
         right_frame = tk.Frame(self.top_frame, bg="gray10")
         right_frame.pack(side=tk.RIGHT, padx=(10, 0), fill=tk.Y)
 
         tk.Label(right_frame, text="Activity Log", fg="white", bg="gray10", font=("Helvetica", 12, "bold")).pack(anchor='w')
-        self.log_widget = scrolledtext.ScrolledText(right_frame, width=40, height=30, bg="black", fg="lawn green", font=("Consolas", 9), relief=tk.SUNKEN, borderwidth=1)
+        self.log_widget = scrolledtext.ScrolledText(right_frame, width=50, height=30, bg="black", fg="lawn green", font=("Consolas", 9), relief=tk.SUNKEN, borderwidth=1)
         self.log_widget.pack(fill=tk.BOTH, expand=True)
         self.log_widget.configure(state='disabled')
 
@@ -53,17 +47,9 @@ class App:
 
     def create_buttons(self, parent_frame):
         button_frame = tk.Frame(parent_frame, bg="gray10"); button_frame.pack(fill=tk.X, pady=5)
-        
-        self.pause_button = tk.Button(button_frame, text="Pause", command=self.toggle_pause, width=10); self.pause_button.pack(side=tk.LEFT, padx=(0, 10))
-        
-        tk.Button(button_frame, text="Slower <<", command=lambda: self.change_speed(-1)).pack(side=tk.LEFT)
-        self.speed_label = tk.Label(button_frame, text=f"Speed: {self.SPEED_LEVELS[self.current_speed_index][0]}", width=10, fg="white", bg="gray10")
-        self.speed_label.pack(side=tk.LEFT)
-        tk.Button(button_frame, text=">> Faster", command=lambda: self.change_speed(1)).pack(side=tk.LEFT)
-
+        self.pause_button = tk.Button(button_frame, text="Pause", command=self.toggle_pause, width=10); self.pause_button.pack(side=tk.LEFT)
         quit_button = tk.Button(button_frame, text="Quit Game", command=self.master.destroy, bg="dark red", fg="white", activebackground="red"); quit_button.pack(side=tk.RIGHT, padx=5)
         tk.Button(button_frame, text="Try Again", command=self.start_new_game, bg="steel blue", fg="white", activebackground="light blue").pack(side=tk.RIGHT)
-        
         self.master.bind('<space>', self.toggle_pause)
         self.master.bind('<KeyPress-w>', lambda e: self.move_player(0, -1)); self.master.bind('<KeyPress-s>', lambda e: self.move_player(0, 1))
         self.master.bind('<KeyPress-a>', lambda e: self.move_player(-1, 0)); self.master.bind('<KeyPress-d>', lambda e: self.move_player(1, 0))
@@ -76,18 +62,13 @@ class App:
         
         self.grid = Grid(self.GRID_WIDTH, self.GRID_HEIGHT, self.log_message)
         self.player_bot = self.grid.populate_world(
-            num_parts=50, num_stations=5, num_drones=4, 
-            num_swarms=3, num_gatherers=6, num_repair_bots=3
+            num_parts=50, num_stations=5, num_drones=5, 
+            num_swarms=4, num_gatherers=6, num_repair_bots=3
         )
         self.initial_survivor_count = len(self.grid.get_all_bots())
         
         self.log_message("[INFO] New simulation started.")
         self.simulation_step()
-
-    def change_speed(self, delta):
-        """Changes the simulation speed."""
-        self.current_speed_index = max(0, min(len(self.SPEED_LEVELS) - 1, self.current_speed_index + delta))
-        self.speed_label.config(text=f"Speed: {self.SPEED_LEVELS[self.current_speed_index][0]}")
 
     def toggle_pause(self, event=None):
         self.simulation_paused = not self.simulation_paused
@@ -97,13 +78,14 @@ class App:
 
     def move_player(self, dx, dy):
         if not self.simulation_paused and self.player_bot and self.player_bot.energy > 0:
+            # --- THE FIX: Log player movement ---
+            self.grid.log(f"[PLAYER] Moved ({dx}, {dy}).")
             new_x, new_y = self.player_bot.x + dx, self.player_bot.y + dy
-            if self.grid.is_valid(new_x, new_y):
-                entity = self.grid.get_entity(new_x, new_y)
-                if not entity or entity.type in ['spare_part', 'recharge_station']:
-                    self.grid.move_entity(self.player_bot, new_x, new_y)
-                    if entity and entity.type == 'spare_part':
-                        self.player_bot.pickup_part(entity, self.grid)
+            entity = self.grid.get_entity(new_x % self.grid.width, new_y % self.grid.height)
+            if not entity or entity.type in ['spare_part', 'recharge_station']:
+                self.grid.move_entity(self.player_bot, new_x, new_y)
+                if entity and entity.type == 'spare_part':
+                    self.player_bot.pickup_part(entity, self.grid)
 
     def simulation_step(self):
         if self.simulation_paused or 'normal' != self.master.state(): return
@@ -117,8 +99,7 @@ class App:
         if not game_is_over:
             self.grid.update_world()
             self.draw_grid()
-            current_delay = self.SPEED_LEVELS[self.current_speed_index][1]
-            self.master.after(current_delay, self.simulation_step)
+            self.master.after(self.SIMULATION_SPEED, self.simulation_step)
 
     def draw_grid(self):
         self.canvas.delete("all")

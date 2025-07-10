@@ -12,7 +12,6 @@ class Grid:
         self.entities = []
         self.parts_collected = 0
         self.initial_part_count = 0
-        # A simple logger function that can be passed from the GUI
         self.log = logger_func if logger_func else lambda message: None
 
     def is_valid(self, x, y):
@@ -30,7 +29,8 @@ class Grid:
         if entity in self.entities: self.entities.remove(entity)
 
     def move_entity(self, entity, new_x, new_y):
-        entity.x = new_x; entity.y = new_y
+        entity.x = new_x % self.width
+        entity.y = new_y % self.height
         
     def get_all_bots(self):
         return [e for e in self.entities if isinstance(e, SurvivorBot)]
@@ -47,8 +47,15 @@ class Grid:
         entities_to_place = [player_instance]
         for i in range(num_gatherers): entities_to_place.append(GathererBot(f'gatherer_{i}', 0, 0))
         for i in range(num_repair_bots): entities_to_place.append(RepairBot(f'repair_{i}', 0, 0))
-        for _ in range(num_drones): entities_to_place.append(MalfunctioningDrone(0, 0))
-        for _ in range(num_swarms): entities_to_place.append(ScavengerSwarm(0, 0))
+        
+        # --- THE FIX: Log threat spawning ---
+        for _ in range(num_drones):
+            entities_to_place.append(MalfunctioningDrone(0, 0))
+            self.log("[SPAWN] A Malfunctioning Drone appeared!")
+        for _ in range(num_swarms):
+            entities_to_place.append(ScavengerSwarm(0, 0))
+            self.log("[SPAWN] A Scavenger Swarm appeared!")
+
         for _ in range(num_parts): entities_to_place.append(SparePart(random.choice(['small', 'medium', 'large']), 0, 0))
         for _ in range(num_stations): entities_to_place.append(RechargeStation(0, 0))
 
@@ -70,5 +77,5 @@ class Grid:
         bots_to_remove = [e for e in self.get_all_bots() if hasattr(e, 'energy') and e.energy <= 0]
         if bots_to_remove:
             for bot in bots_to_remove:
-                self.log(f"[EVENT] {bot.bot_id} has been destroyed!")
+                self.log(f"[EVENT] {getattr(bot, 'bot_id', 'A bot')} has been destroyed!")
                 self.remove_entity(bot)

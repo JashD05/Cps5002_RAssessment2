@@ -7,10 +7,8 @@ class MalfunctioningDrone:
     def __init__(self, x, y):
         self.x, self.y = x, y
         self.type, self.color = 'drone', 'red'
-        self.vision_range = 10
-        self.attack_cooldown = 0
-        self.shock_damage = 40
-        self.disable_damage = 80
+        self.vision_range = 10; self.attack_cooldown = 0
+        self.shock_damage, self.disable_damage = 30, 60
         self.target_bot = None
 
     def update(self, grid):
@@ -23,7 +21,10 @@ class MalfunctioningDrone:
 
         if not self.target_bot or self.target_bot not in grid.entities:
             visible_bots = [b for b in grid.get_all_bots() if math.hypot(self.x-b.x, self.y-b.y) <= self.vision_range]
-            self.target_bot = self.prioritize_target(visible_bots) if visible_bots else None
+            new_target = self.prioritize_target(visible_bots) if visible_bots else None
+            if new_target and new_target != self.target_bot:
+                self.target_bot = new_target
+                grid.log(f"[AI] Drone has acquired a new target: {self.target_bot.bot_id}")
         
         if self.target_bot:
             self.move_towards(self.target_bot, grid)
@@ -44,7 +45,7 @@ class MalfunctioningDrone:
         if target.y > self.y: dy = 1
         elif target.y < self.y: dy = -1
         new_x, new_y = self.x + dx, self.y + dy
-        if grid.is_valid(new_x, new_y): grid.move_entity(self, new_x, new_y)
+        grid.move_entity(self, new_x, new_y)
 
     def attack(self, bot, grid):
         is_high_priority = bot.type == 'player_bot' or (hasattr(bot, 'carrying_part') and bot.carrying_part)
