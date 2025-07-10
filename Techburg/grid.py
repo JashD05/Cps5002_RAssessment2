@@ -6,93 +6,69 @@ from agents.swarm import ScavengerSwarm
 from entities import SparePart, RechargeStation
 
 class Grid:
-    """Manages the simulation world, entities, and their interactions."""
-    def __init__(self, width, height):
+    def __init__(self, width, height, logger_func=None):
         self.width = width
         self.height = height
         self.entities = []
         self.parts_collected = 0
-        self.initial_part_count = 0 # To track the total number of parts for the win condition
+        self.initial_part_count = 0
+        # A simple logger function that can be passed from the GUI
+        self.log = logger_func if logger_func else lambda message: None
 
     def is_valid(self, x, y):
-        """Checks if a given coordinate is within the grid boundaries."""
         return 0 <= x < self.width and 0 <= y < self.height
 
     def get_entity(self, x, y):
-        """Gets the entity at a specific coordinate."""
         for entity in self.entities:
-            if entity.x == x and entity.y == y:
-                return entity
+            if entity.x == x and entity.y == y: return entity
         return None
 
     def add_entity(self, entity):
-        """Adds an entity to the grid."""
-        if self.is_valid(entity.x, entity.y):
-            self.entities.append(entity)
+        if self.is_valid(entity.x, entity.y): self.entities.append(entity)
 
     def remove_entity(self, entity):
-        """Removes an entity from the grid."""
-        if entity in self.entities:
-            self.entities.remove(entity)
+        if entity in self.entities: self.entities.remove(entity)
 
     def move_entity(self, entity, new_x, new_y):
-        """Moves an entity to a new position."""
-        entity.x = new_x
-        entity.y = new_y
+        entity.x = new_x; entity.y = new_y
         
     def get_all_bots(self):
-        """Returns a list of all bot objects."""
         return [e for e in self.entities if isinstance(e, SurvivorBot)]
+    
+    def get_threats(self):
+        return [e for e in self.entities if isinstance(e, (MalfunctioningDrone, ScavengerSwarm))]
 
     def increment_parts_collected(self):
-        """Increments the counter for collected parts."""
         self.parts_collected += 1
 
     def populate_world(self, num_parts, num_stations, num_drones, num_swarms, num_gatherers, num_repair_bots):
-        """Populates the grid and returns the player_bot instance."""
-        self.initial_part_count = num_parts # Store the total number of parts
-
-        entities_to_place = []
+        self.initial_part_count = num_parts
         player_instance = PlayerBot('player', 0, 0)
-        entities_to_place.append(player_instance)
-        
-        for i in range(num_gatherers):
-            entities_to_place.append(GathererBot(f'gatherer_{i}', 0, 0))
-        for i in range(num_repair_bots):
-            entities_to_place.append(RepairBot(f'repair_{i}', 0, 0))
-        for _ in range(num_drones):
-            entities_to_place.append(MalfunctioningDrone(0, 0))
-        for _ in range(num_swarms):
-            entities_to_place.append(ScavengerSwarm(0, 0))
-        for _ in range(num_parts):
-            entities_to_place.append(SparePart(random.choice(['small', 'medium', 'large']), 0, 0))
-        for _ in range(num_stations):
-            entities_to_place.append(RechargeStation(0, 0))
+        entities_to_place = [player_instance]
+        for i in range(num_gatherers): entities_to_place.append(GathererBot(f'gatherer_{i}', 0, 0))
+        for i in range(num_repair_bots): entities_to_place.append(RepairBot(f'repair_{i}', 0, 0))
+        for _ in range(num_drones): entities_to_place.append(MalfunctioningDrone(0, 0))
+        for _ in range(num_swarms): entities_to_place.append(ScavengerSwarm(0, 0))
+        for _ in range(num_parts): entities_to_place.append(SparePart(random.choice(['small', 'medium', 'large']), 0, 0))
+        for _ in range(num_stations): entities_to_place.append(RechargeStation(0, 0))
 
-        for entity in entities_to_place:
-            self.add_at_empty(entity)
-            
+        for entity in entities_to_place: self.add_at_empty(entity)
         return player_instance
 
     def add_at_empty(self, entity):
-        """Adds an entity to a random empty cell."""
         while True:
-            x = random.randint(0, self.width - 1)
-            y = random.randint(0, self.height - 1)
+            x, y = random.randint(0, self.width-1), random.randint(0, self.height-1)
             if not self.get_entity(x, y):
-                entity.x = x
-                entity.y = y
+                entity.x, entity.y = x, y
                 self.add_entity(entity)
                 break
 
     def update_world(self):
-        """Updates all entities and removes those with no energy."""
         for entity in self.entities[:]:
-            if entity in self.entities:
-                entity.update(self)
+            if entity in self.entities: entity.update(self)
         
-        bots_to_remove = [
-            e for e in self.get_all_bots() if hasattr(e, 'energy') and e.energy <= 0
-        ]
-        for bot in bots_to_remove:
-            self.remove_entity(bot)
+        bots_to_remove = [e for e in self.get_all_bots() if hasattr(e, 'energy') and e.energy <= 0]
+        if bots_to_remove:
+            for bot in bots_to_remove:
+                self.log(f"[EVENT] {bot.bot_id} has been destroyed!")
+                self.remove_entity(bot)
