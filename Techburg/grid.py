@@ -11,7 +11,7 @@ class Grid:
         self.entities = []; self.parts_collected = 0
         self.initial_part_count = 0; self.parts_corroded = 0
         self.log = logger_func if logger_func else lambda message: None
-        self.known_part_locations = set()
+        self.shared_knowledge = {"parts": set(), "threats": set()}
 
     def is_valid(self, x, y): return 0 <= x < self.width and 0 <= y < self.height
 
@@ -20,7 +20,10 @@ class Grid:
             if entity.x == x and entity.y == y: return entity
         return None
     
+    # --- THIS IS THE FIX ---
+    # The missing helper function has been added.
     def get_bots_at_location(self, x, y):
+        """Returns a list of all SurvivorBot instances at a specific coordinate."""
         return [e for e in self.entities if isinstance(e, SurvivorBot) and e.x == x and e.y == y]
 
     def add_entity(self, entity):
@@ -28,8 +31,10 @@ class Grid:
 
     def remove_entity(self, entity):
         if entity in self.entities:
-            if isinstance(entity, SparePart) and (entity.x, entity.y) in self.known_part_locations:
-                self.known_part_locations.remove((entity.x, entity.y))
+            if isinstance(entity, SparePart) and (entity.x, entity.y) in self.shared_knowledge["parts"]:
+                self.shared_knowledge["parts"].remove((entity.x, entity.y))
+            if isinstance(entity, (MalfunctioningDrone, ScavengerSwarm)) and (entity.x, entity.y) in self.shared_knowledge["threats"]:
+                self.shared_knowledge["threats"].remove((entity.x, entity.y))
             self.entities.remove(entity)
 
     def move_entity(self, entity, new_x, new_y):

@@ -1,6 +1,5 @@
 # Techburg/agents/survivor_bot.py
 import math
-import random
 from entities import SparePart
 
 class SurvivorBot:
@@ -15,7 +14,7 @@ class SurvivorBot:
 
     def update(self, grid):
         if self.energy <= 0: return
-        if self.stunned > 0: self.stunned -= 1; return
+        if self.stunned > 0: self.stunned -= 1; grid.log(f"[STATUS] {self.bot_id} is stunned."); return
         self.energy -= self.energy_depletion_rate
         self.update_enhancements()
         self.execute_state_action(grid)
@@ -31,15 +30,19 @@ class SurvivorBot:
                 self.move_towards(self.target_entity, grid)
 
     def get_new_goal(self, grid):
+        target = None
         if self.energy < self.max_energy * 0.4:
-            self.target_entity = self.find_nearest_target(grid, 'recharge_station')
+            target = self.find_nearest_target(grid, 'recharge_station')
+            if target: grid.log(f"[AI] {self.bot_id} seeking energy at ({target.x},{target.y}).")
         elif self.carrying_part:
-            self.target_entity = self.find_nearest_target(grid, 'recharge_station')
+            target = self.find_nearest_target(grid, 'recharge_station')
+            if target: grid.log(f"[AI] {self.bot_id} delivering part.")
         else:
-            self.target_entity = self.find_nearest_target(grid, 'spare_part')
+            target = self.find_nearest_target(grid, 'spare_part')
+            if target: grid.log(f"[AI] {self.bot_id} targeting part at ({target.x},{target.y}).")
+        self.target_entity = target
     
     def move_towards(self, target, grid):
-        """Moves one step directly towards the target without pathfinding."""
         dx, dy = 0, 0
         if target.x > self.x: dx = 1
         elif target.x < self.x: dx = -1
@@ -50,9 +53,14 @@ class SurvivorBot:
 
     def handle_arrival(self, entity, grid):
         if entity.type == 'recharge_station':
+            grid.log(f"[EVENT] {self.bot_id} recharged to {int(self.max_energy)} energy.")
             self.energy = self.max_energy
-            if self.carrying_part: grid.increment_parts_collected(); self.carrying_part = None
-        elif entity.type == 'spare_part': self.pickup_part(entity, grid)
+            if self.carrying_part: 
+                grid.increment_parts_collected()
+                grid.log(f"[SUCCESS] {self.bot_id} delivered a {self.carrying_part.size} part! Total: {grid.parts_collected}")
+                self.carrying_part = None
+        elif entity.type == 'spare_part':
+            self.pickup_part(entity, grid)
         self.target_entity = None
 
     def find_nearest_target(self, grid, target_type):
@@ -61,6 +69,7 @@ class SurvivorBot:
 
     def pickup_part(self, part, grid):
         if not self.carrying_part and part in grid.entities:
+            grid.log(f"[EVENT] {self.bot_id} picked up a {part.size} part.")
             self.carrying_part = part
             grid.remove_entity(part); self.apply_enhancement(part)
             
@@ -84,7 +93,13 @@ class GathererBot(SurvivorBot):
 class RepairBot(SurvivorBot):
     def __init__(self, bot_id, x, y): super().__init__(bot_id, x, y, energy=250); self.type = 'repair_bot'; self.color = "cornflower blue"
 class PlayerBot(SurvivorBot):
-    def __init__(self, bot_id, x, y): super().__init__(bot_id, x, y, energy=300); self.type = 'player_bot'; self.color = "orange"; self.energy_depletion_rate = 0.08
+    def __init__(self, bot_id, x, y):
+        super().__init__(bot_id, x, y, energy=300)
+        self.type = 'player_bot'; self.color = "orange"
+        self.energy_depletion_rate = 0.08
     def update(self, grid):
         if self.energy <= 0: return
-        self.energy -= self.energy_depletion_rate; self.update_enhancements()
+        if self.stunned > 0: self.stunned -= 1; grid.log(f"[STATUS] {self.bot_id} is stunned."); return
+        self.energy -= self.energy_depletion_rate
+        self.update_enhancements()
+        self.execute_state_action(grid)

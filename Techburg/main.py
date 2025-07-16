@@ -10,27 +10,46 @@ from agents.survivor_bot import SurvivorBot
 class App:
     def __init__(self, master):
         self.master = master
-        self.master.title("Techburg Simulation")
+        self.master.title("Techburg AI Simulation")
         self.master.configure(bg="gray10")
-        self.SIMULATION_SPEED = 100 
+
+        self.SIMULATION_SPEED = 300 
         self.simulation_paused = False
         
+        # --- Main UI Frame ---
         self.top_frame = tk.Frame(self.master, bg="gray10")
         self.top_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+        # --- Left Frame (Simulation Canvas & Controls) ---
         left_frame = tk.Frame(self.top_frame, bg="gray10")
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # --- Middle Frame (Activity Log) ---
+        middle_frame = tk.Frame(self.top_frame, bg="gray10")
+        middle_frame.pack(side=tk.LEFT, padx=(10, 0), fill=tk.Y)
+        
+        # --- Right Frame (Color Key) ---
         right_frame = tk.Frame(self.top_frame, bg="gray10")
         right_frame.pack(side=tk.RIGHT, padx=(10, 0), fill=tk.Y)
 
-        tk.Label(right_frame, text="Activity Log", fg="white", bg="gray10", font=("Helvetica", 12, "bold")).pack(anchor='w')
-        self.log_widget = scrolledtext.ScrolledText(right_frame, width=50, height=30, bg="black", fg="lawn green", font=("Consolas", 9), relief=tk.SUNKEN, borderwidth=1)
+        # --- Activity Log ---
+        tk.Label(middle_frame, text="Activity Log", fg="white", bg="gray10", font=("Helvetica", 12, "bold")).pack(anchor='w')
+        self.log_widget = scrolledtext.ScrolledText(middle_frame, width=50, height=30, bg="black", fg="lawn green", font=("Consolas", 9), relief=tk.SUNKEN, borderwidth=1)
         self.log_widget.pack(fill=tk.BOTH, expand=True)
         self.log_widget.configure(state='disabled')
+        
+        # --- Color Key ---
+        tk.Label(right_frame, text="Color Key", fg="white", bg="gray10", font=("Helvetica", 12, "bold")).pack(anchor='w')
+        key_frame = tk.Frame(right_frame, bg="black", relief=tk.SUNKEN, borderwidth=1)
+        key_frame.pack(fill=tk.BOTH, expand=True)
+        self.create_color_key(key_frame)
 
-        self.GRID_WIDTH, self.GRID_HEIGHT, self.CELL_SIZE = 40, 30, 20
+        # --- Game Canvas ---
+        self.GRID_WIDTH, self.GRID_HEIGHT, self.CELL_SIZE = 30, 20, 20
         self.canvas = tk.Canvas(left_frame, width=self.GRID_WIDTH*self.CELL_SIZE, height=self.GRID_HEIGHT*self.CELL_SIZE, bg='black', highlightthickness=0)
         self.canvas.pack()
 
+        # --- Status Bar & Buttons ---
         status_frame = tk.Frame(left_frame, bg="gray25", relief=tk.SUNKEN, borderwidth=1)
         status_frame.pack(fill=tk.X, pady=(5,0))
         self.status_text = tk.StringVar()
@@ -40,9 +59,27 @@ class App:
         self.create_buttons(left_frame)
         self.start_new_game()
 
-    def log_message(self, message):
+    def create_color_key(self, parent_frame):
+        """Populates the color key sidebar."""
+        key_entries = [
+            ("Main Bot", "orange"), ("Gatherer Bot", "light sea green"), ("Repair Bot", "cornflower blue"),
+            ("Drone", "red"), ("Swarm", "lawn green"), ("Recharge Station", "purple"),
+            ("Speed Part", "light green"), ("Vision Part", "light blue"), ("Energy Part", "orange")
+        ]
+        title = tk.Label(parent_frame, text="Entities", bg="black", fg="white", font=("Helvetica", 10, "bold"))
+        title.pack(pady=(5, 10))
+        for text, color in key_entries:
+            entry_frame = tk.Frame(parent_frame, bg="black")
+            color_box = tk.Label(entry_frame, text="  ", bg=color)
+            color_box.pack(side=tk.LEFT, padx=(5, 10))
+            label = tk.Label(entry_frame, text=text, bg="black", fg="white")
+            label.pack(side=tk.LEFT, anchor='w')
+            entry_frame.pack(anchor='w', pady=2)
+
+    def log_message(self, message, message_type="INFO"):
+        """Adds a formatted message to the activity log widget."""
         self.log_widget.configure(state='normal')
-        self.log_widget.insert(tk.END, message + "\n")
+        self.log_widget.insert(tk.END, f"[{message_type}] {message}\n")
         self.log_widget.see(tk.END)
         self.log_widget.configure(state='disabled')
 
@@ -52,48 +89,39 @@ class App:
         quit_button = tk.Button(button_frame, text="Quit Game", command=self.master.destroy, bg="dark red", fg="white", activebackground="red"); quit_button.pack(side=tk.RIGHT, padx=5)
         tk.Button(button_frame, text="Try Again", command=self.start_new_game, bg="steel blue", fg="white", activebackground="light blue").pack(side=tk.RIGHT)
         self.master.bind('<space>', self.toggle_pause)
-        self.master.bind('<KeyPress-w>', lambda e: self.move_player(0, -1)); self.master.bind('<KeyPress-s>', lambda e: self.move_player(0, 1))
-        self.master.bind('<KeyPress-a>', lambda e: self.move_player(-1, 0)); self.master.bind('<KeyPress-d>', lambda e: self.move_player(1, 0))
 
     def start_new_game(self):
+        """Initializes or resets the simulation state."""
         self.simulation_paused = False
         if hasattr(self, 'pause_button'): self.pause_button.config(text="Pause")
         self.log_widget.configure(state='normal'); self.log_widget.delete(1.0, tk.END); self.log_widget.configure(state='disabled')
         
         self.grid = Grid(self.GRID_WIDTH, self.GRID_HEIGHT, self.log_message)
-        self.player_bot = self.grid.populate_world(
-            num_parts=50, num_stations=5, num_drones=5, 
-            num_swarms=4, num_gatherers=6, num_repair_bots=3
+        self.main_bot = self.grid.populate_world(
+            num_parts=50, num_stations=5, num_drones=4, 
+            num_swarms=3, num_gatherers=6, num_repair_bots=3
         )
         self.initial_survivor_count = len(self.grid.get_all_bots())
         
-        self.log_message("[INFO] New simulation started.")
+        self.log_message("--- Simulation Starting ---", "INFO")
         self.simulation_step()
 
     def toggle_pause(self, event=None):
         self.simulation_paused = not self.simulation_paused
-        self.log_message(f"[CONTROL] Simulation {'Paused' if self.simulation_paused else 'Resumed'}.")
+        self.log_message(f"Simulation {'Paused' if self.simulation_paused else 'Resumed'}.", "CONTROL")
         self.pause_button.config(text="Resume" if self.simulation_paused else "Pause")
         if not self.simulation_paused: self.simulation_step()
-
-    def move_player(self, dx, dy):
-        if not self.simulation_paused and self.player_bot and self.player_bot.energy > 0:
-            new_x, new_y = self.player_bot.x + dx, self.player_bot.y + dy
-            entity = self.grid.get_entity(new_x % self.grid.width, new_y % self.grid.height)
-            if not entity or entity.type in ['spare_part', 'recharge_station']:
-                self.grid.move_entity(self.player_bot, new_x, new_y)
-                if entity and entity.type == 'spare_part': self.player_bot.pickup_part(entity, self.grid)
 
     def simulation_step(self):
         if self.simulation_paused or 'normal' != self.master.state(): return
         
         game_is_over, reason = False, ""
-        if self.grid.initial_part_count > 0 and (self.grid.parts_collected + self.grid.parts_corroded) >= self.grid.initial_part_count:
+        if self.grid.initial_part_count > 0 and self.grid.parts_collected >= self.grid.initial_part_count:
             self.draw_grid(); self.game_won(); game_is_over = True
+        elif not self.main_bot or self.main_bot.energy <= 0:
+            self.draw_grid(); self.game_over("Main bot's energy depleted!"); game_is_over = True
         elif not self.grid.get_all_bots():
             self.draw_grid(); self.game_over("All survivor bots were eliminated!"); game_is_over = True
-        elif self.player_bot and self.player_bot.energy <= 0:
-            self.draw_grid(); self.game_over("Your bot ran out of energy!"); game_is_over = True
         
         if not game_is_over:
             self.grid.update_world()
@@ -115,19 +143,20 @@ class App:
         all_bots = self.grid.get_all_bots()
         num_survivors = len(all_bots)
         bots_destroyed = self.initial_survivor_count - num_survivors
-        player_energy = int(self.player_bot.energy) if self.player_bot and self.player_bot in all_bots else "---"
+        main_bot_energy = int(self.main_bot.energy) if self.main_bot and self.main_bot in all_bots else "---"
         parts_goal = self.grid.initial_part_count
-        status_string = (f"Player: Energy={player_energy} | Bots Active: {num_survivors} | Parts Collected: {self.grid.parts_collected}/{parts_goal} | Bots Destroyed: {bots_destroyed}")
+        status_string = (f"Main Bot Energy={main_bot_energy} | Bots Active: {num_survivors} | Parts Collected: {self.grid.parts_collected}/{parts_goal} | Bots Destroyed: {bots_destroyed}")
         self.status_text.set(status_string)
 
     def game_won(self):
-        self.log_message("[SUCCESS] All parts accounted for. You win!")
-        self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2, text="Congratulations!\nYOU WIN!", font=("Helvetica", 32, "bold"), fill="lawn green", justify=tk.CENTER)
+        self.log_message("AI TEAM WINS: All parts collected.", "SUCCESS")
+        self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2, text="SIMULATION SUCCESSFUL", font=("Helvetica", 32, "bold"), fill="lawn green")
 
     def game_over(self, reason=""):
-        self.log_message(f"[FAILURE] Game Over: {reason}")
+        self.log_message(f"AI TEAM DEFEATED: {reason}", "FAILURE")
         self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2, text="GAME OVER", font=("Helvetica", 40, "bold"), fill="red")
-        if reason: self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2 + 25, text=reason, font=("Helvetica", 14), fill="white")
+        if reason:
+            self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2 + 25, text=reason, font=("Helvetica", 14), fill="white")
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -9,8 +9,7 @@ class MalfunctioningDrone:
         self.type, self.color = 'drone', 'red'
         self.vision_range = 10
         self.attack_cooldown = 0
-        self.shock_damage = 30
-        self.disable_damage = 60
+        self.shock_damage, self.disable_damage = 30, 60
         self.target_bot = None
 
     def update(self, grid):
@@ -18,7 +17,7 @@ class MalfunctioningDrone:
         
         adjacent_bots = [b for b in grid.get_all_bots() if math.hypot(self.x-b.x, self.y-b.y) <= 1.5]
         if adjacent_bots:
-            self.attack(self.prioritize_target(adjacent_bots))
+            self.attack(self.prioritize_target(adjacent_bots), grid)
             return
 
         if not self.target_bot or self.target_bot not in grid.entities:
@@ -38,7 +37,6 @@ class MalfunctioningDrone:
         return min(bots, key=lambda b: math.hypot(self.x-b.x, self.y-b.y))
         
     def move_towards(self, target, grid):
-        """Moves one step directly towards the target."""
         dx, dy = 0, 0
         if target.x > self.x: dx = 1
         elif target.x < self.x: dx = -1
@@ -47,12 +45,17 @@ class MalfunctioningDrone:
         new_x, new_y = self.x + dx, self.y + dy
         grid.move_entity(self, new_x, new_y)
 
-    def attack(self, bot):
+    def attack(self, bot, grid):
         is_high_priority = bot.type == 'player_bot' or (hasattr(bot, 'carrying_part') and bot.carrying_part)
+        
         if is_high_priority:
-            bot.energy -= self.disable_damage; bot.stunned = 2
+            attack_type, damage = "DISABLE", self.disable_damage
+            bot.energy -= damage; bot.stunned = 2
         else:
-            bot.energy -= self.shock_damage; bot.stunned = 1
+            attack_type, damage = "SHOCK", self.shock_damage
+            bot.energy -= damage; bot.stunned = 1
+        
+        grid.log(f"[ATTACK] Drone used {attack_type} on {bot.bot_id} for {damage} damage.")
         self.attack_cooldown = 3
     
     def move_randomly(self, grid):
