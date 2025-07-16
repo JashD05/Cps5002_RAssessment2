@@ -62,7 +62,7 @@ class App:
     def create_color_key(self, parent_frame):
         """Populates the color key sidebar."""
         key_entries = [
-            ("Main Bot", "orange"), ("Gatherer Bot", "light sea green"), ("Repair Bot", "cornflower blue"),
+            ("Player Bot", "orange"), ("Gatherer Bot", "light sea green"), ("Repair Bot", "cornflower blue"),
             ("Drone", "red"), ("Swarm", "lawn green"), ("Recharge Station", "purple"),
             ("Speed Part", "light green"), ("Vision Part", "light blue"), ("Energy Part", "orange")
         ]
