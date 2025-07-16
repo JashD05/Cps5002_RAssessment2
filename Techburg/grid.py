@@ -21,7 +21,7 @@ class Grid:
         return None
     
     # --- THIS IS THE FIX ---
-    # The missing helper function has been added.
+    # The missing helper function has been added to the Grid class.
     def get_bots_at_location(self, x, y):
         """Returns a list of all SurvivorBot instances at a specific coordinate."""
         return [e for e in self.entities if isinstance(e, SurvivorBot) and e.x == x and e.y == y]

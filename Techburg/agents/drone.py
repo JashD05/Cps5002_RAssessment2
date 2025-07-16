@@ -7,8 +7,7 @@ class MalfunctioningDrone:
     def __init__(self, x, y):
         self.x, self.y = x, y
         self.type, self.color = 'drone', 'red'
-        self.vision_range = 10
-        self.attack_cooldown = 0
+        self.vision_range = 10; self.attack_cooldown = 0
         self.shock_damage, self.disable_damage = 30, 60
         self.target_bot = None
 

@@ -33,13 +33,13 @@ class SurvivorBot:
         target = None
         if self.energy < self.max_energy * 0.4:
             target = self.find_nearest_target(grid, 'recharge_station')
-            if target: grid.log(f"[AI] {self.bot_id} seeking energy at ({target.x},{target.y}).")
+            if target: grid.log(f"[AI] {self.bot_id} seeking energy.")
         elif self.carrying_part:
             target = self.find_nearest_target(grid, 'recharge_station')
             if target: grid.log(f"[AI] {self.bot_id} delivering part.")
         else:
             target = self.find_nearest_target(grid, 'spare_part')
-            if target: grid.log(f"[AI] {self.bot_id} targeting part at ({target.x},{target.y}).")
+            if target: grid.log(f"[AI] {self.bot_id} targeting part.")
         self.target_entity = target
     
     def move_towards(self, target, grid):
