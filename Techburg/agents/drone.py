@@ -1,65 +1,28 @@
 # Techburg/agents/drone.py
-import math
-import random
+import math, random
 from agents.survivor_bot import SurvivorBot
 
 class MalfunctioningDrone:
     def __init__(self, x, y):
         self.x, self.y = x, y
         self.type, self.color = 'drone', 'red'
-        self.vision_range = 10; self.attack_cooldown = 0
-        self.shock_damage, self.disable_damage = 30, 60
         self.target_bot = None
 
     def update(self, grid):
-        if self.attack_cooldown > 0: self.attack_cooldown -= 1; return
-        
-        adjacent_bots = [b for b in grid.get_all_bots() if math.hypot(self.x-b.x, self.y-b.y) <= 1.5]
-        if adjacent_bots:
-            self.attack(self.prioritize_target(adjacent_bots), grid)
-            return
-
         if not self.target_bot or self.target_bot not in grid.entities:
-            visible_bots = [b for b in grid.get_all_bots() if math.hypot(self.x-b.x, self.y-b.y) <= self.vision_range]
-            self.target_bot = self.prioritize_target(visible_bots) if visible_bots else None
-        
+            bots = grid.get_all_bots()
+            self.target_bot = min(bots, key=lambda b: math.hypot(self.x-b.x,self.y-b.y)) if bots else None
         if self.target_bot:
-            self.move_towards(self.target_bot, grid)
-        else:
-            self.move_randomly(grid)
+            if math.hypot(self.x-self.target_bot.x, self.y-self.target_bot.y) <= 1.5:
+                self.target_bot.energy -= 50
+                grid.log(f"[DRONE] Attacked {self.target_bot.bot_id}!")
+            else: self.move_towards(self.target_bot, grid)
+        else: self.move_randomly(grid)
 
-    def prioritize_target(self, bots):
-        player = next((b for b in bots if b.type == 'player_bot'), None)
-        if player: return player
-        part_carrier = next((b for b in bots if hasattr(b, 'carrying_part') and b.carrying_part), None)
-        if part_carrier: return part_carrier
-        return min(bots, key=lambda b: math.hypot(self.x-b.x, self.y-b.y))
-        
     def move_towards(self, target, grid):
-        dx, dy = 0, 0
-        if target.x > self.x: dx = 1
-        elif target.x < self.x: dx = -1
-        if target.y > self.y: dy = 1
-        elif target.y < self.y: dy = -1
-        new_x, new_y = self.x + dx, self.y + dy
-        grid.move_entity(self, new_x, new_y)
-
-    def attack(self, bot, grid):
-        is_high_priority = bot.type == 'player_bot' or (hasattr(bot, 'carrying_part') and bot.carrying_part)
-        
-        if is_high_priority:
-            attack_type, damage = "DISABLE", self.disable_damage
-            bot.energy -= damage; bot.stunned = 2
-        else:
-            attack_type, damage = "SHOCK", self.shock_damage
-            bot.energy -= damage; bot.stunned = 1
-        
-        grid.log(f"[ATTACK] Drone used {attack_type} on {bot.bot_id} for {damage} damage.")
-        self.attack_cooldown = 3
-    
+        dx = 1 if target.x > self.x else -1 if target.x < self.x else 0
+        dy = 1 if target.y > self.y else -1 if target.y < self.y else 0
+        grid.move_entity(self, self.x + dx, self.y + dy)
     def move_randomly(self, grid):
-        moves = [(0,1),(0,-1),(1,0),(-1,0)]; random.shuffle(moves)
-        for dx, dy in moves:
-            new_x, new_y = self.x+dx, self.y+dy
-            if grid.is_valid(new_x,new_y) and not grid.get_entity(new_x,new_y):
-                grid.move_entity(self,new_x,new_y); return
+        dx, dy = random.choice([(0,1), (0,-1), (1,0), (-1,0)])
+        grid.move_entity(self, self.x + dx, self.y + dy)

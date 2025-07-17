@@ -1,6 +1,9 @@
 # Techburg/main.py
 import tkinter as tk
 from tkinter import font as tkFont, scrolledtext
+import random
+import sys
+import os
 from grid import Grid
 from agents.survivor_bot import SurvivorBot
 
@@ -10,43 +13,43 @@ class App:
         self.master.title("Techburg AI Simulation")
         self.master.configure(bg="gray10")
 
-        self.SIMULATION_SPEED = 400 
+        self.SIMULATION_SPEED = 250 
         self.simulation_paused = False
         
-        # --- Main UI Frame ---
+        # Main UI Frame
         self.top_frame = tk.Frame(self.master, bg="gray10")
         self.top_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
 
-        # --- Left Frame (Simulation Canvas & Controls) ---
+        # Left Frame (Simulation & Controls)
         left_frame = tk.Frame(self.top_frame, bg="gray10")
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # --- Middle Frame (Activity Log) ---
+        # Middle Frame (Activity Log)
         middle_frame = tk.Frame(self.top_frame, bg="gray10")
         middle_frame.pack(side=tk.LEFT, padx=(10, 0), fill=tk.Y)
 
-        # --- Right Frame (Color Key) ---
+        # Right Frame (Color Key)
         right_frame = tk.Frame(self.top_frame, bg="gray10")
         right_frame.pack(side=tk.LEFT, padx=(10, 0), fill=tk.Y)
 
-        # --- Activity Log ---
+        # Activity Log Widget
         tk.Label(middle_frame, text="Activity Log", fg="white", bg="gray10", font=("Helvetica", 12, "bold")).pack(anchor='w')
         self.log_widget = scrolledtext.ScrolledText(middle_frame, width=50, height=30, bg="black", fg="lawn green", font=("Consolas", 9), relief=tk.SUNKEN, borderwidth=1)
         self.log_widget.pack(fill=tk.BOTH, expand=True)
         self.log_widget.configure(state='disabled')
         
-        # --- Color Key ---
+        # Color Key Widget
         tk.Label(right_frame, text="Color Key", fg="white", bg="gray10", font=("Helvetica", 12, "bold")).pack(anchor='w')
         key_frame = tk.Frame(right_frame, bg="black", relief=tk.SUNKEN, borderwidth=1)
         key_frame.pack(fill=tk.BOTH, expand=True)
         self.create_color_key(key_frame)
 
-        # --- Game Canvas ---
+        # Game Canvas
         self.GRID_WIDTH, self.GRID_HEIGHT, self.CELL_SIZE = 30, 20, 20
         self.canvas = tk.Canvas(left_frame, width=self.GRID_WIDTH*self.CELL_SIZE, height=self.GRID_HEIGHT*self.CELL_SIZE, bg='black', highlightthickness=0)
         self.canvas.pack()
 
-        # --- Status Bar & Buttons ---
+        # Status Bar & Buttons
         status_frame = tk.Frame(left_frame, bg="gray25", relief=tk.SUNKEN, borderwidth=1)
         status_frame.pack(fill=tk.X, pady=(5,0))
         self.status_text = tk.StringVar()
@@ -57,17 +60,10 @@ class App:
         self.start_new_game()
 
     def create_color_key(self, parent_frame):
-        """Populates the color key sidebar."""
         key_entries = [
-            ("Survivor Bot", "orange"), 
-            ("Gatherer Bot", "light sea green"), 
-            ("Repair Bot", "cornflower blue"),
-            ("Drone", "red"), 
-            ("Swarm", "lawn green"), 
-            ("Recharge Station", "purple"),
-            ("Speed Part", "light green"), 
-            ("Vision Part", "light blue"), 
-            ("Energy Part", "orange")
+            ("Survivor Bot", "orange"), ("Gatherer Bot", "light sea green"), ("Repair Bot", "cornflower blue"),
+            ("Drone", "red"), ("Swarm", "lawn green"), ("Recharge Station", "purple"),
+            ("Speed Part", "light green"), ("Vision Part", "light blue"), ("Energy Part", "orange")
         ]
         title = tk.Label(parent_frame, text="Entities", bg="black", fg="white", font=("Helvetica", 10, "bold"))
         title.pack(pady=(5, 10))
@@ -79,10 +75,9 @@ class App:
             label.pack(side=tk.LEFT, anchor='w')
             entry_frame.pack(anchor='w', pady=2)
 
-    def log_message(self, message, message_type="INFO"):
-        """Adds a formatted message to the activity log widget."""
+    def log_message(self, message):
         self.log_widget.configure(state='normal')
-        self.log_widget.insert(tk.END, f"[{message_type}] {message}\n")
+        self.log_widget.insert(tk.END, message + "\n")
         self.log_widget.see(tk.END)
         self.log_widget.configure(state='disabled')
 
@@ -94,7 +89,6 @@ class App:
         self.master.bind('<space>', self.toggle_pause)
 
     def start_new_game(self):
-        """Initializes or resets the simulation state."""
         self.simulation_paused = False
         if hasattr(self, 'pause_button'): self.pause_button.config(text="Pause")
         self.log_widget.configure(state='normal'); self.log_widget.delete(1.0, tk.END); self.log_widget.configure(state='disabled')
@@ -106,33 +100,30 @@ class App:
         )
         self.initial_survivor_count = len(self.grid.get_all_bots())
         
-        # --- THE FIX: The tutorial is now displayed at the start of each new game. ---
-        self.log_message("Welcome to the Techburg Simulation!", "TUTORIAL")
-        self.log_message("The AI bots are now fully autonomous.", "TUTORIAL")
-        self.log_message("Goal: Collect all 50 spare parts to win.", "TUTORIAL")
-        self.log_message("Bots are eliminated if they run out of energy.", "TUTORIAL")
-        self.log_message("--- Simulation Starting ---", "INFO")
-
+        self.log_message("--- Welcome to the Techburg Simulation ---")
+        self.log_message("Goal: The AI bots must collect all 50 parts.")
+        self.log_message("The simulation ends if all bots are destroyed.")
+        self.log_message("--- Simulation Starting ---")
         self.simulation_step()
 
     def toggle_pause(self, event=None):
         self.simulation_paused = not self.simulation_paused
-        self.log_message(f"Simulation {'Paused' if self.simulation_paused else 'Resumed'}.", "CONTROL")
+        self.log_message(f"--- Simulation {'Paused' if self.simulation_paused else 'Resumed'} ---")
         self.pause_button.config(text="Resume" if self.simulation_paused else "Pause")
         if not self.simulation_paused: self.simulation_step()
 
     def simulation_step(self):
         if self.simulation_paused or 'normal' != self.master.state(): return
         
-        game_is_over, reason = False, ""
+        game_over = False
         if self.grid.initial_part_count > 0 and self.grid.parts_collected >= self.grid.initial_part_count:
-            self.draw_grid(); self.game_won(); game_is_over = True
+            self.draw_grid(); self.game_won(); game_over = True
         elif not self.main_bot or self.main_bot.energy <= 0:
-            self.draw_grid(); self.game_over("Survivor bots ran out of energy!"); game_is_over = True
+            self.draw_grid(); self.game_over("The main survivor bot ran out of energy!"); game_over = True
         elif not self.grid.get_all_bots():
-            self.draw_grid(); self.game_over("All survivor bots were eliminated!"); game_is_over = True
+            self.draw_grid(); self.game_over("All survivor bots were eliminated!"); game_over = True
         
-        if not game_is_over:
+        if not game_over:
             self.grid.update_world()
             self.draw_grid()
             self.master.after(self.SIMULATION_SPEED, self.simulation_step)
@@ -154,17 +145,15 @@ class App:
         bots_destroyed = self.initial_survivor_count - num_survivors
         main_bot_energy = int(self.main_bot.energy) if self.main_bot and self.main_bot in all_bots else "---"
         parts_goal = self.grid.initial_part_count
-        self.status_text.set(f"Main Bot Energy={main_bot_energy} | Bots Active: {num_survivors} | Parts Collected: {self.grid.parts_collected}/{parts_goal} | Bots Destroyed: {bots_destroyed}")
+        self.status_text.set(f"Survivor Bot Energy: {main_bot_energy} | Bots Active: {num_survivors} | Parts Collected: {self.grid.parts_collected}/{parts_goal} | Bots Destroyed: {bots_destroyed}")
 
     def game_won(self):
-        self.log_message("[SUCCESS] AI TEAM WINS: All parts collected.")
-        self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2, text="SIMULATION SUCCESSFUL", font=("Helvetica", 32, "bold"), fill="lawn green")
+        self.log_message("--- SIMULATION SUCCESSFUL ---")
+        self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2, text="AI TEAM WINS", font=("Helvetica", 32, "bold"), fill="lawn green")
 
     def game_over(self, reason=""):
-        self.log_message(f"[FAILURE] AI TEAM DEFEATED: {reason}", "FAILURE")
+        self.log_message(f"--- SIMULATION FAILED: {reason} ---")
         self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2, text="GAME OVER", font=("Helvetica", 40, "bold"), fill="red")
-        if reason:
-            self.canvas.create_text(self.GRID_WIDTH*self.CELL_SIZE/2, self.GRID_HEIGHT*self.CELL_SIZE/2 + 25, text=reason, font=("Helvetica", 14), fill="white")
 
 if __name__ == "__main__":
     root = tk.Tk()
