@@ -110,7 +110,7 @@ class App:
         if self.grid.initial_part_count > 0 and self.grid.parts_collected >= self.grid.initial_part_count:
             self.game_won(); game_over = True
         elif not self.main_bot or self.main_bot not in self.grid.entities:
-            self.game_over("The survivor bot was destroyed!"); game_over = True
+            self.game_over("ENERGY CORE DEPLETED"); game_over = True
         elif not self.grid.get_all_bots():
             self.game_over("All survivor bots were eliminated!"); game_over = True
         
