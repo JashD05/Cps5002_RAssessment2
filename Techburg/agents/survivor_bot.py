@@ -5,54 +5,106 @@ from entities import SparePart
 class SurvivorBot:
     def __init__(self, bot_id, x, y, energy):
         self.bot_id = bot_id; self.x = x; self.y = y; self.energy = energy
-        self.max_energy, self.energy_depletion_rate = 200, 0.1
+        
+        # **THE FIX:** Increased the base maximum energy for all bots.
+        self.base_max_energy = 500
+        self.max_energy = self.base_max_energy
+        
+        self.base_speed = 1; self.base_vision = 5
+        self.speed = self.base_speed; self.vision = self.base_vision
+        self.energy_depletion_rate = 0.1
         self.carrying_part, self.target_entity = None, None
         self.type = 'survivor_bot'; self.color = "deep sky blue"
+        self.stunned, self.active_enhancements = 0, {}
 
     def update(self, grid):
+        if self.energy <= 0: return
+        if self.stunned > 0: self.stunned -= 1; return
         self.energy -= self.energy_depletion_rate
+        self.update_enhancements()
+        self.execute_state_action(grid)
+
+    def execute_state_action(self, grid):
         if not self.target_entity or self.target_entity not in grid.entities:
             self.get_new_goal(grid)
+        
         if self.target_entity:
-            if self.x == self.target_entity.x and self.y == self.target_entity.y: self.handle_arrival(grid)
-            else: self.move_towards(self.target_entity, grid)
+            if self.x == self.target_entity.x and self.y == self.target_entity.y:
+                self.handle_arrival(self.target_entity, grid)
+            else:
+                self.move_towards(self.target_entity, grid)
 
     def get_new_goal(self, grid):
-        target = None
-        if self.energy < self.max_energy * 0.4: target = self.find_nearest(grid, 'recharge_station')
-        elif self.carrying_part: target = self.find_nearest(grid, 'recharge_station')
-        else: target = self.find_nearest(grid, 'spare_part')
-        
-        if target and self.target_entity != target:
-            self.target_entity = target
-            grid.log(f"[{self.bot_id}] New target: {target.type} at ({target.x},{target.y})")
+        if self.energy < self.max_energy * 0.4:
+            self.target_entity = self.find_nearest_target(grid, 'recharge_station')
+        elif self.carrying_part:
+            self.target_entity = self.find_nearest_target(grid, 'recharge_station')
+        else:
+            self.target_entity = self.find_nearest_target(grid, 'spare_part')
     
     def move_towards(self, target, grid):
-        dx = 1 if target.x > self.x else -1 if target.x < self.x else 0
-        dy = 1 if target.y > self.y else -1 if target.y < self.y else 0
-        grid.move_entity(self, self.x + dx, self.y + dy)
+        dx, dy = 0, 0
+        if target.x > self.x: dx = 1
+        elif target.x < self.x: dx = -1
+        if target.y > self.y: dy = 1
+        elif target.y < self.y: dy = -1
+        new_x, new_y = self.x + dx, self.y + dy
+        grid.move_entity(self, new_x, new_y)
 
-    def handle_arrival(self, grid):
-        if self.target_entity.type == 'recharge_station':
+    def handle_arrival(self, entity, grid):
+        if entity.type == 'recharge_station':
             self.energy = self.max_energy
-            grid.log(f"[{self.bot_id}] Recharged to full energy.")
-            if self.carrying_part:
-                grid.increment_parts_collected()
-                grid.log(f"[{self.bot_id}] Delivered a part! Total: {grid.parts_collected}")
-                self.carrying_part = None
-        elif self.target_entity.type == 'spare_part':
-            self.carrying_part = self.target_entity
-            grid.remove_entity(self.target_entity)
-            grid.log(f"[{self.bot_id}] Picked up a {self.carrying_part.size} part.")
+            if self.carrying_part: grid.increment_parts_collected(); self.carrying_part = None
+        elif entity.type == 'spare_part':
+            self.pickup_part(entity, grid)
         self.target_entity = None
 
-    def find_nearest(self, grid, target_type):
+    def find_nearest_target(self, grid, target_type):
         targets = [e for e in grid.entities if e.type == target_type]
         return min(targets, key=lambda t:math.hypot(self.x-t.x, self.y-t.y)) if targets else None
 
+    def pickup_part(self, part, grid):
+        if not self.carrying_part and part in grid.entities:
+            self.carrying_part = part
+            grid.remove_entity(part); self.apply_enhancement(part)
+            
+    def apply_enhancement(self, part):
+        self.active_enhancements[part.enhancement_type] = getattr(part, 'max_corrosion', 1000)
+        self.recalculate_stats()
+
+    def update_enhancements(self):
+        expired = [e for e, life in self.active_enhancements.items() if life <= 0]
+        for e in expired: del self.active_enhancements[e]
+        if expired: self.recalculate_stats()
+        for e in self.active_enhancements: self.active_enhancements[e] -= 1
+
+    def recalculate_stats(self):
+        self.max_energy = self.base_max_energy + (100 if 'energy_capacity' in self.active_enhancements else 0)
+        self.speed = self.base_speed * (1.5 if 'speed' in self.active_enhancements else 1)
+        self.vision = self.base_vision + (3 if 'vision' in self.active_enhancements else 0)
+
 class GathererBot(SurvivorBot):
-    def __init__(self, bot_id, x, y): super().__init__(bot_id, x, y, 200); self.type = 'gatherer_bot'; self.color = "light sea green"
+    def __init__(self, bot_id, x, y):
+        # **THE FIX:** Increased starting energy
+        super().__init__(bot_id, x, y, energy=500)
+        self.type = 'gatherer_bot'; self.color = "light sea green"
+
 class RepairBot(SurvivorBot):
-    def __init__(self, bot_id, x, y): super().__init__(bot_id, x, y, 250); self.type = 'repair_bot'; self.color = "cornflower blue"
+    def __init__(self, bot_id, x, y):
+        # **THE FIX:** Increased starting energy
+        super().__init__(bot_id, x, y, energy=500)
+        self.type = 'repair_bot'; self.color = "cornflower blue"
+
 class PlayerBot(SurvivorBot):
-    def __init__(self, bot_id, x, y): super().__init__(bot_id, x, y, 300); self.type = 'player_bot'; self.color = "orange"
+    def __init__(self, bot_id, x, y):
+        # **THE FIX:** Increased starting energy
+        super().__init__(bot_id, x, y, energy=500)
+        self.type = 'player_bot'; self.color = "orange"
+        self.energy_depletion_rate = 0.08
+    
+    def update(self, grid):
+        if self.energy <= 0: return
+        if self.stunned > 0: self.stunned -= 1; return
+        self.energy -= self.energy_depletion_rate
+        self.update_enhancements()
+        self.execute_state_action(grid)

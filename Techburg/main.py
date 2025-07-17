@@ -1,6 +1,9 @@
 # Techburg/main.py
 import tkinter as tk
 from tkinter import font as tkFont, scrolledtext
+import random
+import sys
+import os
 from grid import Grid
 from agents.survivor_bot import SurvivorBot
 
@@ -10,35 +13,43 @@ class App:
         self.master.title("Techburg AI Simulation")
         self.master.configure(bg="gray10")
 
-        self.SIMULATION_SPEED = 250 
+        self.SIMULATION_SPEED = 100 
         self.simulation_paused = False
         
+        # --- Main UI Frame ---
         self.top_frame = tk.Frame(self.master, bg="gray10")
         self.top_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
 
+        # Left Frame (Simulation & Controls)
         left_frame = tk.Frame(self.top_frame, bg="gray10")
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
+        # Middle Frame (Activity Log)
         middle_frame = tk.Frame(self.top_frame, bg="gray10")
         middle_frame.pack(side=tk.LEFT, padx=(10, 0), fill=tk.Y)
 
+        # Right Frame (Color Key)
         right_frame = tk.Frame(self.top_frame, bg="gray10")
         right_frame.pack(side=tk.LEFT, padx=(10, 0), fill=tk.Y)
 
+        # Activity Log Widget
         tk.Label(middle_frame, text="Activity Log", fg="white", bg="gray10", font=("Helvetica", 12, "bold")).pack(anchor='w')
         self.log_widget = scrolledtext.ScrolledText(middle_frame, width=50, height=30, bg="black", fg="lawn green", font=("Consolas", 9), relief=tk.SUNKEN, borderwidth=1)
         self.log_widget.pack(fill=tk.BOTH, expand=True)
         self.log_widget.configure(state='disabled')
         
+        # Color Key Widget
         tk.Label(right_frame, text="Color Key", fg="white", bg="gray10", font=("Helvetica", 12, "bold")).pack(anchor='w')
         key_frame = tk.Frame(right_frame, bg="black", relief=tk.SUNKEN, borderwidth=1)
         key_frame.pack(fill=tk.BOTH, expand=True)
         self.create_color_key(key_frame)
 
+        # Game Canvas
         self.GRID_WIDTH, self.GRID_HEIGHT, self.CELL_SIZE = 30, 20, 20
         self.canvas = tk.Canvas(left_frame, width=self.GRID_WIDTH*self.CELL_SIZE, height=self.GRID_HEIGHT*self.CELL_SIZE, bg='black', highlightthickness=0)
         self.canvas.pack()
 
+        # Status Bar & Buttons
         status_frame = tk.Frame(left_frame, bg="gray25", relief=tk.SUNKEN, borderwidth=1)
         status_frame.pack(fill=tk.X, pady=(5,0))
         self.status_text = tk.StringVar()
@@ -89,6 +100,8 @@ class App:
         )
         self.initial_survivor_count = len(self.grid.get_all_bots())
         
+        self.log_message("--- Welcome to the Techburg Simulation ---")
+        self.log_message("Goal: The AI bots must collect all 50 parts.")
         self.log_message("--- Simulation Starting ---")
         self.simulation_step()
 
@@ -106,16 +119,17 @@ class App:
         self.draw_grid()
         
         # Now, check for end conditions based on the new state
-        game_over = False
+        game_is_over = False
         if self.grid.initial_part_count > 0 and self.grid.parts_collected >= self.grid.initial_part_count:
-            self.game_won(); game_over = True
-        elif not self.main_bot or self.main_bot not in self.grid.entities:
-            self.game_over("ENERGY CORE DEPLETED"); game_over = True
+            self.game_won(); game_is_over = True
+        # **THE FIX:** This is now the primary lose condition.
+        elif not self.main_bot or self.main_bot.energy <= 0:
+            self.game_over("The main survivor bot ran out of energy!"); game_is_over = True
         elif not self.grid.get_all_bots():
-            self.game_over("All survivor bots were eliminated!"); game_over = True
+            self.game_over("All other survivor bots were eliminated!"); game_is_over = True
         
         # If the game is not over, schedule the next step
-        if not game_over:
+        if not game_is_over:
             self.master.after(self.SIMULATION_SPEED, self.simulation_step)
 
     def draw_grid(self):
