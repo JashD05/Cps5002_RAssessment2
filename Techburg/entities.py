@@ -12,4 +12,4 @@ class RechargeStation:
     def __init__(self, x, y):
         self.x, self.y = x, y
         self.type, self.color = "recharge_station", "purple"
-    def update(self, grid): pass    
+    def update(self, grid): pass

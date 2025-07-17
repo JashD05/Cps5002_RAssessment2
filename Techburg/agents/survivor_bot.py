@@ -18,9 +18,14 @@ class SurvivorBot:
             else: self.move_towards(self.target_entity, grid)
 
     def get_new_goal(self, grid):
-        if self.energy < self.max_energy * 0.4: self.target_entity = self.find_nearest(grid, 'recharge_station')
-        elif self.carrying_part: self.target_entity = self.find_nearest(grid, 'recharge_station')
-        else: self.target_entity = self.find_nearest(grid, 'spare_part')
+        target = None
+        if self.energy < self.max_energy * 0.4: target = self.find_nearest(grid, 'recharge_station')
+        elif self.carrying_part: target = self.find_nearest(grid, 'recharge_station')
+        else: target = self.find_nearest(grid, 'spare_part')
+        
+        if target and self.target_entity != target:
+            self.target_entity = target
+            grid.log(f"[{self.bot_id}] New target: {target.type} at ({target.x},{target.y})")
     
     def move_towards(self, target, grid):
         dx = 1 if target.x > self.x else -1 if target.x < self.x else 0

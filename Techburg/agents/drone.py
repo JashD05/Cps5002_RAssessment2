@@ -11,11 +11,17 @@ class MalfunctioningDrone:
     def update(self, grid):
         if not self.target_bot or self.target_bot not in grid.entities:
             bots = grid.get_all_bots()
-            self.target_bot = min(bots, key=lambda b: math.hypot(self.x-b.x,self.y-b.y)) if bots else None
+            if bots:
+                new_target = min(bots, key=lambda b: math.hypot(self.x-b.x,self.y-b.y))
+                if new_target != self.target_bot:
+                    self.target_bot = new_target
+                    grid.log(f"[DRONE] Acquired new target: {self.target_bot.bot_id}")
+        
         if self.target_bot:
             if math.hypot(self.x-self.target_bot.x, self.y-self.target_bot.y) <= 1.5:
-                self.target_bot.energy -= 50
-                grid.log(f"[DRONE] Attacked {self.target_bot.bot_id}!")
+                damage = 50
+                self.target_bot.energy -= damage
+                grid.log(f"[DRONE] Attacked {self.target_bot.bot_id} for {damage} damage!")
             else: self.move_towards(self.target_bot, grid)
         else: self.move_randomly(grid)
 
